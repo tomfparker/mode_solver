@@ -1,0 +1,205 @@
+{
+ "platform": "Linux-6.8.0-49-generic-x86_64-with-glibc2.39",
+ "results": [
+  {
+   "kind": "scalar",
+   "n": 100,
+   "unknowns": 10000,
+   "nnz": 49600,
+   "lu_nnz": 371346,
+   "build_ms": 7.78,
+   "eigs_total_ms": 226.56,
+   "splu_ms": 25.49,
+   "arnoldi_ms": 57.96,
+   "neff": [
+    1.809014,
+    1.574113,
+    1.491813,
+    1.434974
+   ],
+   "tuned_total_ms": 83.45,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    10000,
+    4
+   ],
+   "run": 0
+  },
+  {
+   "kind": "scalar",
+   "n": 100,
+   "unknowns": 10000,
+   "nnz": 49600,
+   "lu_nnz": 371346,
+   "build_ms": 6.71,
+   "eigs_total_ms": 199.62,
+   "splu_ms": 28.97,
+   "arnoldi_ms": 63.72,
+   "neff": [
+    1.809014,
+    1.574113,
+    1.491813,
+    1.434974
+   ],
+   "tuned_total_ms": 92.69,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    10000,
+    4
+   ],
+   "run": 1
+  },
+  {
+   "kind": "scalar",
+   "n": 200,
+   "unknowns": 40000,
+   "nnz": 199200,
+   "lu_nnz": 1952434,
+   "build_ms": 20.37,
+   "eigs_total_ms": 1019.74,
+   "splu_ms": 156.03,
+   "arnoldi_ms": 311.4,
+   "neff": [
+    1.803841,
+    1.556497,
+    1.487151,
+    1.434676
+   ],
+   "tuned_total_ms": 467.42,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    40000,
+    4
+   ],
+   "run": 0
+  },
+  {
+   "kind": "scalar",
+   "n": 200,
+   "unknowns": 40000,
+   "nnz": 199200,
+   "lu_nnz": 1952434,
+   "build_ms": 13.09,
+   "eigs_total_ms": 1360.27,
+   "splu_ms": 157.24,
+   "arnoldi_ms": 307.44,
+   "neff": [
+    1.803841,
+    1.556497,
+    1.487151,
+    1.434676
+   ],
+   "tuned_total_ms": 464.68,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    40000,
+    4
+   ],
+   "run": 1
+  },
+  {
+   "kind": "vector",
+   "n": 100,
+   "unknowns": 20000,
+   "nnz": 178402,
+   "lu_nnz": 1729356,
+   "build_ms": 9.91,
+   "eigs_total_ms": 584.75,
+   "splu_ms": 120.38,
+   "arnoldi_ms": 252.09,
+   "neff": [
+    1.809016,
+    1.809014,
+    1.574123,
+    1.574115
+   ],
+   "tuned_total_ms": 372.47,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    20000,
+    4
+   ],
+   "run": 0
+  },
+  {
+   "kind": "vector",
+   "n": 100,
+   "unknowns": 20000,
+   "nnz": 178402,
+   "lu_nnz": 1729356,
+   "build_ms": 10.62,
+   "eigs_total_ms": 601.0,
+   "splu_ms": 121.99,
+   "arnoldi_ms": 230.28,
+   "neff": [
+    1.809016,
+    1.809014,
+    1.574123,
+    1.574115
+   ],
+   "tuned_total_ms": 352.27,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    20000,
+    4
+   ],
+   "run": 1
+  },
+  {
+   "kind": "vector",
+   "n": 200,
+   "unknowns": 80000,
+   "nnz": 716802,
+   "lu_nnz": 8798952,
+   "build_ms": 45.29,
+   "eigs_total_ms": 4030.25,
+   "splu_ms": 667.01,
+   "arnoldi_ms": 1327.69,
+   "neff": [
+    1.803843,
+    1.803842,
+    1.556505,
+    1.556503
+   ],
+   "tuned_total_ms": 1994.71,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    80000,
+    4
+   ],
+   "run": 0
+  },
+  {
+   "kind": "vector",
+   "n": 200,
+   "unknowns": 80000,
+   "nnz": 716802,
+   "lu_nnz": 8798952,
+   "build_ms": 51.05,
+   "eigs_total_ms": 3979.77,
+   "splu_ms": 735.84,
+   "arnoldi_ms": 1149.75,
+   "neff": [
+    1.803843,
+    1.803842,
+    1.556505,
+    1.556503
+   ],
+   "tuned_total_ms": 1885.59,
+   "nsolves": 49,
+   "paths_agree": true,
+   "field_shape": [
+    80000,
+    4
+   ],
+   "run": 1
+  }
+ ]
+}

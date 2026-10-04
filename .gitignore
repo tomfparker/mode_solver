@@ -1,0 +1,14 @@
+node_modules
+dist
+*.local
+*.log
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+test-results/
+playwright-report/
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

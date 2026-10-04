@@ -1,0 +1,15 @@
+[project]
+name = "mode-solver-numerics"
+version = "0.0.0"
+description = "Numerics for the browser waveguide mode solver (runs natively and in Pyodide)"
+license = "MIT"
+requires-python = ">=3.12"
+# Pinned to the versions shipped with Pyodide 314.0.7 so native tests match the browser.
+dependencies = ["numpy==2.4.6", "scipy==1.18.0"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["solver_py"]
+testpaths = ["solver_py/tests"]
