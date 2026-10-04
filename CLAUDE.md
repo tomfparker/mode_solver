@@ -138,7 +138,7 @@ data/
 Node 22 (Vite 8 needs >= 20.19; `.nvmrc` pins it) is installed via nvm in `~/.config/nvm`.
 The system also has apt Node 18, which fails with a `styleText` error. Run `nvm use` if `node -v` shows 18.
 In non-interactive shells nvm is not loaded; use
-`export PATH="$HOME/.config/nvm/versions/node/v22.23.3/bin:$PATH"`). Python uses a repo-local
+`export PATH="$HOME/.config/nvm/versions/node/v22.23.3/bin:$PATH"`. Python uses a repo-local
 `.venv` (numpy/scipy pinned to the versions Pyodide ships).
 ```
 npm install
