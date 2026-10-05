@@ -1,0 +1,33 @@
+{
+  "id": "SiO2",
+  "name": "SiO₂ (fused silica)",
+  "kind": "isotropic",
+  "n": {
+    "model": "sellmeier1",
+    "coefficients": [
+      0.0,
+      0.6961663,
+      0.0684043,
+      0.4079426,
+      0.1162414,
+      0.8974794,
+      9.896161
+    ],
+    "range": [
+      0.21,
+      6.7
+    ],
+    "source": {
+      "citation": "I. H. Malitson. Interspecimen comparison of the refractive index of fused silica. J. Opt. Soc. Am. 55, 1205-1208 (1965); C. Z. Tan. Determination of refractive index of silica glass for infrared wavelengths by IR spectroscopy. J. Non-Cryst. Solids 223, 158-163 (1998)",
+      "doi": "10.1364/JOSA.55.001205",
+      "otherDois": [
+        "10.1016/S0022-3093(97)00438-9"
+      ],
+      "notes": "Sellmeier formula is reported in Ref. 1 for the 0.21–3.71 μm wavelength range. Ref. 2 verifies the validity of the formula up to 6.7 μm.",
+      "url": "https://refractiveindex.info/?shelf=main&book=SiO2&page=Malitson",
+      "file": "data/materials/refractiveindex/SiO2_nk_Malitson.yml",
+      "conditions": "Fused silica, 20 °C",
+      "retrieved": "2026-10-05"
+    }
+  }
+}

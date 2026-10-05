@@ -1,0 +1,57 @@
+{
+  "id": "LiNbO3",
+  "name": "LiNbO₃ (congruent)",
+  "kind": "uniaxial",
+  "ordinary": {
+    "model": "sellmeier2",
+    "coefficients": [
+      0.0,
+      2.6734,
+      0.01764,
+      1.229,
+      0.05914,
+      12.614,
+      474.6
+    ],
+    "range": [
+      0.4,
+      5.0
+    ],
+    "source": {
+      "citation": "D. E. Zelmon, D. L. Small, D. Jundt. Infrared corrected Sellmeier coefficients for congruently grown lithium niobate and 5 mol.% magnesium oxide-doped lithium niobate. J. Opt. Soc. Am. B 14, 3319-3322 (1997)",
+      "doi": "10.1364/JOSAB.14.003319",
+      "otherDois": [],
+      "notes": null,
+      "url": "https://refractiveindex.info/?shelf=main&book=LiNbO3&page=Zelmon-o",
+      "file": "data/materials/refractiveindex/LiNbO3_nk_Zelmon-o.yml",
+      "conditions": "21 °C. Ordinary ray (o). Congruently grown lithium niobate (CLN).",
+      "retrieved": "2026-10-05"
+    }
+  },
+  "extraordinary": {
+    "model": "sellmeier2",
+    "coefficients": [
+      0.0,
+      2.9804,
+      0.02047,
+      0.5981,
+      0.0666,
+      8.9543,
+      416.08
+    ],
+    "range": [
+      0.4,
+      5.0
+    ],
+    "source": {
+      "citation": "D. E. Zelmon, D. L. Small, D. Jundt. Infrared corrected Sellmeier coefficients for congruently grown lithium niobate and 5 mol.% magnesium oxide-doped lithium niobate. J. Opt. Soc. Am. B 14, 3319-3322 (1997)",
+      "doi": "10.1364/JOSAB.14.003319",
+      "otherDois": [],
+      "notes": null,
+      "url": "https://refractiveindex.info/?shelf=main&book=LiNbO3&page=Zelmon-e",
+      "file": "data/materials/refractiveindex/LiNbO3_nk_Zelmon-e.yml",
+      "conditions": "21 °C. Extraordinary ray (e). Congruently grown lithium niobate (CLN).",
+      "retrieved": "2026-10-05"
+    }
+  }
+}

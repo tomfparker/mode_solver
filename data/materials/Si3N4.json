@@ -1,0 +1,29 @@
+{
+  "id": "Si3N4",
+  "name": "Si₃N₄",
+  "kind": "isotropic",
+  "n": {
+    "model": "sellmeier1",
+    "coefficients": [
+      0.0,
+      3.0249,
+      0.1353406,
+      40314.0,
+      1239.842
+    ],
+    "range": [
+      0.31,
+      5.504
+    ],
+    "source": {
+      "citation": "K. Luke, Y. Okawachi, M. R. E. Lamont, A. L. Gaeta, M. Lipson. Broadband mid-infrared frequency comb generation in a Si3N4 microresonator. Opt. Lett. 40, 4823-4826 (2015)",
+      "doi": "10.1364/OL.40.004823",
+      "otherDois": [],
+      "notes": null,
+      "url": "https://refractiveindex.info/?shelf=main&book=Si3N4&page=Luke",
+      "file": "data/materials/refractiveindex/Si3N4_nk_Luke.yml",
+      "conditions": "340 nm Si3N4 on 3.1 μm of thermal SiO2 on silicon.",
+      "retrieved": "2026-10-05"
+    }
+  }
+}

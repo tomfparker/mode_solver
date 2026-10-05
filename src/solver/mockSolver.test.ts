@@ -1,23 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Project } from '../geometry/types';
+import { buildTemplate, TEMPLATES } from '../geometry/templates';
 import { MockSolver, mockSolve } from './mockSolver';
 import { isAbortError, type SolveRequest } from './types';
 
 const ETA0 = 376.730313668;
-
-const project: Project = {
-  version: 1,
-  wavelength: 1.55,
-  stack: {
-    substrate: 'Si',
-    layers: [{ id: 'box', name: 'BOX', material: 'SiO2', thickness: 3 }],
-    cladding: 'SiO2',
-  },
-  features: [{ id: 'core', name: 'Core', kind: 'rect', material: 'Si3N4', cx: 0, cy: 3.4, width: 1.2, height: 0.8 }],
-  settings: { solverKind: 'auto', numModes: 4 },
-};
-
-const req = (id: string): SolveRequest => ({ id, project, numModes: 4 });
+const project = buildTemplate('sin-strip');
+const req = (id: string, p = project): SolveRequest => ({ id, project: p, numModes: 4 });
 
 describe('mockSolve', () => {
   const res = mockSolve(req('a'));
@@ -51,17 +39,44 @@ describe('mockSolve', () => {
         p += Ex!.re[q] * Hy!.re[q] + Ex!.im[q] * Hy!.im[q] - (Ey!.re[q] * Hx!.re[q] + Ey!.im[q] * Hx!.im[q]);
       }
       expect((p * dA) / 2).toBeCloseTo(1, 4);
-      // Sanity: paraxial H magnitude.
       const i = Ex!.re.findIndex((v) => v !== 0);
       if (i >= 0) expect(Hy!.re[i] / Ex!.re[i]).toBeCloseTo(m.neff.re / ETA0, 8);
     }
   });
 
-  it('gives a fundamental MFD of the order of the core size, and a small boundary amplitude', () => {
+  it('gives a fundamental of plausible size, inside the window', () => {
     const m0 = res.modes[0];
+    expect(m0.guided).toBe(true);
     expect(m0.mfd.x).toBeGreaterThan(0.5);
     expect(m0.mfd.x).toBeLessThan(3);
     expect(m0.boundaryAmplitude).toBeLessThan(1e-3);
+  });
+
+  it('keeps n_eff between the cladding and core indices', () => {
+    for (const m of res.modes) {
+      expect(m.neff.re).toBeGreaterThan(1.44);
+      expect(m.neff.re).toBeLessThan(2.1);
+    }
+  });
+
+  it('runs on every template without throwing, with at least one mode', () => {
+    for (const t of TEMPLATES) {
+      const r = mockSolve(req(t.id, t.build()));
+      expect(r.modes.length).toBeGreaterThan(0);
+      expect(Number.isFinite(r.modes[0].neff.re)).toBe(true);
+    }
+  });
+
+  it('shrinking the core reduces the number of guided modes', () => {
+    const big = buildTemplate('sin-strip');
+    const small = buildTemplate('sin-strip');
+    Object.assign(big.features[0], { width: 3, height: 1.5 });
+    Object.assign(small.features[0], { width: 0.6, height: 0.4 });
+    big.settings.numModes = 12;
+    small.settings.numModes = 12;
+    const nb = mockSolve({ id: 'b', project: big, numModes: 12 }).modes.filter((m) => m.guided).length;
+    const ns = mockSolve({ id: 's', project: small, numModes: 12 }).modes.filter((m) => m.guided).length;
+    expect(nb).toBeGreaterThan(ns);
   });
 });
 

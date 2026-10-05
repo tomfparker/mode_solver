@@ -2,7 +2,8 @@
 // It must stay swappable for a future Rust→WASM backend. If it changes, update the mock
 // solver and the worker together (CLAUDE.md).
 
-import type { Project, SolverKind } from '../geometry/types';
+import type { Project } from '../geometry/types';
+import type { SolverKind } from './kinds';
 
 export type FieldComponent = 'Ex' | 'Ey' | 'Ez' | 'Hx' | 'Hy' | 'Hz';
 
@@ -33,6 +34,8 @@ export interface ModeResult {
   fields: Partial<Record<FieldComponent, ComplexField>>;
   /** Peak |E|² within the outer boundary cells relative to the global peak (0..1). Drives the boundary warning. */
   boundaryAmplitude: number;
+  /** False for modes at or below cut-off (radiating into the surroundings). */
+  guided: boolean;
 }
 
 export interface SolveRequest {

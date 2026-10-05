@@ -1,8 +1,11 @@
 // Mock solver: plausible-looking but NON-PHYSICAL modes, so UI work isn't blocked on numerics.
-// Fields are Hermite–Gaussians sized from the core; n_eff is a made-up smooth function of
-// core size and λ. Every result carries isMock: true and the UI must say so.
+// It uses the real geometry, solve domain and material indices, and a crude Marcatili-style
+// estimate so n_eff, mode count and mode size respond sensibly to edits. Fields are
+// Hermite–Gaussians. Every result carries isMock: true and the UI must say so.
 
+import { effectiveMeshStep, indexAtPoint, solveDomain, structureBox } from '../geometry/geometry';
 import type { Project } from '../geometry/types';
+import type { Axis } from '../materials/types';
 import { LatestWins } from './latestWins';
 import {
   abortError,
@@ -17,27 +20,10 @@ import {
 
 // Free-space impedance η0 = μ0·c (SI defining constants), Ω. Used for the paraxial H = (n/η0) ẑ×E.
 const ETA0 = 376.730313668;
+const MAX_CELLS = 300;
 
 export interface MockOptions {
   latencyMs?: number;
-  gridCells?: number; // cells along the longer side
-}
-
-/** Bounding box of the guiding core: first feature, else the thinnest finite layer as a slab. */
-export function coreBox(p: Project): { cx: number; cy: number; w: number; h: number } {
-  const f = p.features[0];
-  if (f) return { cx: f.cx, cy: f.cy, w: f.width, h: f.height };
-  let y = 0;
-  let best = { cx: 0, cy: 0.5, w: 4, h: 1 };
-  let bestT = Infinity;
-  for (const l of p.stack.layers) {
-    if (l.thickness < bestT) {
-      bestT = l.thickness;
-      best = { cx: 0, cy: y + l.thickness / 2, w: 4, h: l.thickness };
-    }
-    y += l.thickness;
-  }
-  return best;
 }
 
 function hermite(n: number, x: number): number {
@@ -50,72 +36,116 @@ function hermite(n: number, x: number): number {
   }
 }
 
-/** Mode order for the mock: (m, n, polarisation). */
-function modeOrder(count: number): { m: number; n: number; pol: 'TE' | 'TM' }[] {
-  const out: { m: number; n: number; pol: 'TE' | 'TM' }[] = [];
-  const mn = [[0, 0], [1, 0], [0, 1], [2, 0], [1, 1], [3, 0]];
-  for (const [m, n] of mn) {
-    for (const pol of ['TE', 'TM'] as const) {
-      if (out.length < count) out.push({ m, n, pol });
+/** Core index and surrounding index seen by one polarisation (crude: sampled around the core box). */
+function contrast(p: Project, axis: Axis) {
+  const b = structureBox(p);
+  const cx = (b.x0 + b.x1) / 2;
+  const cy = (b.y0 + b.y1) / 2;
+  let nCore = -Infinity;
+  for (let i = 0; i <= 4; i++) {
+    for (let j = 0; j <= 4; j++) {
+      const x = b.x0 + ((b.x1 - b.x0) * (i + 0.5)) / 5;
+      const y = b.y0 + ((b.y1 - b.y0) * (j + 0.5)) / 5;
+      nCore = Math.max(nCore, indexAtPoint(p, x, y, axis));
     }
   }
-  return out;
+  const gap = 0.3;
+  const around = [
+    indexAtPoint(p, b.x0 - gap, cy, axis),
+    indexAtPoint(p, b.x1 + gap, cy, axis),
+    indexAtPoint(p, cx, b.y1 + gap, axis),
+    indexAtPoint(p, cx, b.y0 - gap, axis),
+  ].filter((n) => n < nCore - 1e-6); // same-material surroundings (rib slab) don't count as cladding
+  const nBg = around.length ? Math.max(...around) : nCore - 0.01;
+  return { nCore, nBg, box: b, cx, cy };
 }
 
-export function mockSolve(req: SolveRequest, opts: MockOptions = {}): SolveResult {
+/** Marcuse-style spot-size factor, used here only to make mock mode sizes behave plausibly. */
+function spot(halfWidth: number, v: number): number {
+  const vv = Math.max(v, 0.7);
+  return halfWidth * (0.65 + 1.619 * vv ** -1.5 + 2.879 * vv ** -6);
+}
+
+export function mockSolve(req: SolveRequest): SolveResult {
   const t0 = performance.now();
   const p = req.project;
-  const core = coreBox(p);
   const lam = p.wavelength;
-  // Domain: core plus a margin that grows with λ (mirrors what auto-sizing will do).
-  const pad = Math.max(1.0, 1.5 * lam);
-  const W = core.w + 2 * pad;
-  const H = core.h + 2 * pad;
-  const cells = opts.gridCells ?? 100;
-  const d = Math.max(W, H) / cells;
-  const nx = Math.max(8, Math.round(W / d));
-  const ny = Math.max(8, Math.round(H / d));
-  const x = Float64Array.from({ length: nx }, (_, i) => core.cx - W / 2 + (i + 0.5) * (W / nx));
-  const y = Float64Array.from({ length: ny }, (_, j) => core.cy - H / 2 + (j + 0.5) * (H / ny));
+  const k0 = (2 * Math.PI) / lam;
+  const dom = solveDomain(p);
+  const step = effectiveMeshStep(p);
+  const W = dom.x1 - dom.x0;
+  const H = dom.y1 - dom.y0;
+  const nx = Math.min(MAX_CELLS, Math.max(8, Math.round(W / step)));
+  const ny = Math.min(MAX_CELLS, Math.max(8, Math.round(H / step)));
+  const x = Float64Array.from({ length: nx }, (_, i) => dom.x0 + (i + 0.5) * (W / nx));
+  const y = Float64Array.from({ length: ny }, (_, j) => dom.y0 + (j + 0.5) * (H / ny));
   const grid: FieldGrid = { x, y, nx, ny };
   const dA = (W / nx) * (H / ny);
 
-  // Waist: tracks the core but never below ~λ/3 (a mode can't be much smaller than that).
-  const wx0 = Math.max(0.5 * core.w, lam / 3);
-  const wy0 = Math.max(0.5 * core.h, lam / 3);
+  type Cand = { m: number; n: number; pol: 'TE' | 'TM'; neff: number; guided: boolean; wx: number; wy: number; cx: number; cy: number };
+  const cands: Cand[] = [];
+  for (const pol of ['TE', 'TM'] as const) {
+    const c = contrast(p, pol === 'TE' ? 'x' : 'y');
+    const na = Math.sqrt(Math.max(c.nCore ** 2 - c.nBg ** 2, 1e-8));
+    const ax = (c.box.x1 - c.box.x0) / 2;
+    const ay = (c.box.y1 - c.box.y0) / 2;
+    const vx = k0 * ax * na * (pol === 'TE' ? 1 : 0.92);
+    const vy = k0 * ay * na * (pol === 'TM' ? 1 : 0.92);
+    for (const [m, n] of [[0, 0], [1, 0], [0, 1], [2, 0], [1, 1], [3, 0], [0, 2]]) {
+      // Marcatili-like: (1 − b) = (1 − bx) + (1 − by); cut-off of order m at V = mπ/2.
+      const bx = 1 - (((m + 1) * Math.PI) / (2 * vx + Math.PI)) ** 2;
+      const by = 1 - (((n + 1) * Math.PI) / (2 * vy + Math.PI)) ** 2;
+      const b = bx + by - 1;
+      const guided = b > 0;
+      if (!guided && (m > 0 || n > 0)) continue;
+      const bb = guided ? b : 0.002;
+      cands.push({
+        m, n, pol, guided,
+        neff: Math.sqrt(c.nBg ** 2 + (c.nCore ** 2 - c.nBg ** 2) * bb),
+        wx: Math.min(spot(ax, vx), W / 2),
+        wy: Math.min(spot(ay, vy), H / 2),
+        cx: c.cx, cy: c.cy,
+      });
+    }
+  }
+  cands.sort((a, b) => b.neff - a.neff);
+  const guidedOnes = cands.filter((c) => c.guided);
+  const chosen = (guidedOnes.length ? guidedOnes : cands.slice(0, 1)).slice(0, req.numModes);
 
-  const modes: ModeResult[] = modeOrder(req.numModes).map(({ m, n, pol }, i) => {
-    // Made-up n_eff: rises with core size / λ, falls with mode order. Not physical.
-    const v = Math.sqrt(core.w * core.h) / lam;
-    const neffRe = 1.45 + 0.4 * (1 - Math.exp(-2 * v)) - 0.03 * (m + n) - (pol === 'TM' ? 0.01 : 0) - 0.001 * i;
-    const wx = wx0 * (1 + 0.1 * (pol === 'TM' ? 1 : 0));
-    const wy = wy0;
-    const N = nx * ny;
+  const N = nx * ny;
+  const modes: ModeResult[] = chosen.map(({ m, n, pol, neff, guided, wx, wy, cx, cy }) => {
     const main = new Float32Array(N);
     const ez = new Float32Array(N);
     for (let j = 0; j < ny; j++) {
-      const v1 = (y[j] - core.cy) / wy;
-      for (let k = 0; k < nx; k++) {
-        const u = (x[k] - core.cx) / wx;
-        const val = hermite(m, Math.SQRT2 * u) * hermite(n, Math.SQRT2 * v1) * Math.exp(-(u * u + v1 * v1));
-        main[j * nx + k] = val;
-        // Small longitudinal component, ∝ transverse derivative, 90° out of phase (stored in im).
-        ez[j * nx + k] = -0.15 * (pol === 'TE' ? u / wx : v1 / wy) * val * lam;
+      const v = (y[j] - cy) / wy;
+      for (let i = 0; i < nx; i++) {
+        const u = (x[i] - cx) / wx;
+        const val = hermite(m, Math.SQRT2 * u) * hermite(n, Math.SQRT2 * v) * Math.exp(-(u * u + v * v));
+        main[j * nx + i] = val;
+        // Small longitudinal component ∝ transverse derivative, 90° out of phase (stored in im).
+        ez[j * nx + i] = -0.15 * (pol === 'TE' ? u / wx : v / wy) * val * lam;
       }
     }
     // Unit power: P = ½·(n/η0)·∫|E_t|² dA = 1.
     let sum = 0;
     for (let q = 0; q < N; q++) sum += main[q] * main[q];
-    const scale = Math.sqrt(2 / ((neffRe / ETA0) * sum * dA));
-    const hScale = neffRe / ETA0;
+    const scale = Math.sqrt(2 / ((neff / ETA0) * sum * dA));
+    const hScale = neff / ETA0;
     const e = main.map((v2) => v2 * scale);
     const zero = () => new Float32Array(N);
     const cf = (re: Float32Array, im: Float32Array = zero()): ComplexField => ({ re, im });
+    const ezs = ez.map((v2) => v2 * scale);
     const fields: ModeResult['fields'] =
       pol === 'TE'
-        ? { Ex: cf(e), Ey: cf(zero()), Ez: cf(zero(), ez.map((v2) => v2 * scale)), Hx: cf(zero()), Hy: cf(e.map((v2) => v2 * hScale)), Hz: cf(zero()) }
-        : { Ex: cf(zero()), Ey: cf(e), Ez: cf(zero(), ez.map((v2) => v2 * scale)), Hx: cf(e.map((v2) => -v2 * hScale)), Hy: cf(zero()), Hz: cf(zero()) };
-    return { neff: { re: neffRe, im: 0 }, ...intensityMetrics(e, grid), teFraction: pol === 'TE' ? 0.98 : 0.02, fields };
+        ? { Ex: cf(e), Ey: cf(zero()), Ez: cf(zero(), ezs), Hx: cf(zero()), Hy: cf(e.map((v2) => v2 * hScale)), Hz: cf(zero()) }
+        : { Ex: cf(zero()), Ey: cf(e), Ez: cf(zero(), ezs), Hx: cf(e.map((v2) => -v2 * hScale)), Hy: cf(zero()), Hz: cf(zero()) };
+    return {
+      neff: { re: neff, im: 0 },
+      ...intensityMetrics(e, grid),
+      teFraction: pol === 'TE' ? 0.98 : 0.02,
+      guided,
+      fields,
+    };
   });
 
   return {
@@ -189,7 +219,7 @@ export class MockSolver implements Solver {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         try {
-          resolve(mockSolve(req, this.opts));
+          resolve(mockSolve(req));
         } catch (e) {
           reject(e);
         }
