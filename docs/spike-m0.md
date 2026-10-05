@@ -26,9 +26,9 @@ the same numpy/scipy. Code: `solver_py/modesolver/spike.py`.
 | vector 200×200 | 80 000 | 4 000 | 1 900–2 000 | **2 650 + 50 build** | **3 094 + 50 build** | 6 070 / 7 162 |
 
 Firefox (desktop, run by the maintainer on the same machine, 2026-10-04): runtime ready after
-**12.4 s** on first (uncached) load; field transfer 8 ms. Firefox's LU fill for vector 200×200 is
-higher than native (8.8M vs 3.5M nnz with the same ordering). The cause is unknown and doesn't
-matter at 100×100. Chrome numbers are pending.
+**12.4 s** on first (uncached) load; field transfer 8 ms. LU fill (nnz) is identical in native,
+Node and Firefox, so the speed differences come from the WASM engines alone, not from the
+factorisation. Chrome numbers are pending.
 
 Field transfer out of Python is negligible (a few ms for six 200×200 components). Raw data:
 `docs/spike-native.json`, `docs/spike-node.json`.
@@ -61,5 +61,5 @@ Firefox on first load (dominated by downloading ~30 MB). Cached repeat-visit tim
 Playwright's browser downloads time out from this network, so automated runs use Pyodide
 under Node (V8). Firefox has now been measured by hand (above). **Still needed: Chrome, and
 the cached repeat-visit load time:** `npm run dev`, open
-<http://localhost:5173/spike.html>, and send me the table. Firefox's SpiderMonkey WASM
-performance may differ. The page also reports the time until the runtime is ready.
+<http://localhost:5173/spike.html>, send the table, then reload and send
+the "Runtime ready" line.
