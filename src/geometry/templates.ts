@@ -116,7 +116,7 @@ export const TEMPLATES: Template[] = [
       ...base('Step-index fibre'),
       stack: { substrate: { material: 'SiO2' }, layers: [], cladding: { material: 'SiO2' } },
       features: [
-        { id: uid('f'), name: 'Core', kind: 'circle', material: 'SiO2', deltaN: 0.005, anchor: 'substrate', x: 0, y: 0, radius: 4 },
+        { id: uid('f'), name: 'Core', kind: 'circle', material: 'SiO2', deltaN: 0.005, deltaNIsExample: true, anchor: 'substrate', x: 0, y: 0, radius: 4 },
       ],
     }),
   },
@@ -136,6 +136,7 @@ export const TEMPLATES: Template[] = [
           x: 0,
           y: 0,
           deltaN: 0.01,
+          deltaNIsExample: true,
           profileX: 'erf-strip',
           stripWidth: 7,
           wx: 2,

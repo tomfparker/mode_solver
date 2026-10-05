@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { anchorY } from '../geometry/geometry';
+import type { RectFeature } from '../geometry/types';
 import { buildTemplate } from '../geometry/templates';
 import { addFeature, deleteLayer, patchFeature, patchLayer, setAnchorKeepPosition, useStore } from './store';
 
@@ -11,7 +12,7 @@ const core = () => useStore.getState().project.features[0];
 
 describe('undo/redo', () => {
   it('undoes and redoes a single edit', () => {
-    const w0 = core().kind === 'rect' && core().width;
+    const w0 = (core() as RectFeature).width;
     patchFeature(core().id, { width: 2 });
     expect(core()).toMatchObject({ width: 2 });
     useStore.getState().undo();

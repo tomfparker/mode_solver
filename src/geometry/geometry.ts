@@ -1,6 +1,6 @@
 // Geometry helpers shared by the canvas, the mock solver and (later) the rasteriser.
 
-import { indexAt } from '../materials/library';
+import { indexAt, maxIndexAt } from '../materials/library';
 import type { Axis } from '../materials/types';
 import type { Anchor, Feature, GradedFeature, Layer, MaterialUse, Project, ShapeFeature } from './types';
 
@@ -211,4 +211,20 @@ export function usedMaterials(p: Project): MaterialUse[] {
   const uses: MaterialUse[] = [p.stack.substrate, ...p.stack.layers, p.stack.cladding];
   for (const f of p.features) if (f.kind !== 'graded') uses.push(f);
   return uses;
+}
+
+/** Highest refractive index anywhere in the structure: the default eigensolver shift guess. */
+export function maxIndex(p: Project): number {
+  let n = 1;
+  for (const u of usedMaterials(p)) {
+    const dn = 'deltaN' in u ? ((u as { deltaN?: number }).deltaN ?? 0) : 0;
+    n = Math.max(n, maxIndexAt(u.material, p.wavelength, p.customMaterials) + Math.max(dn, 0));
+  }
+  for (const f of p.features) {
+    if (f.kind === 'graded') {
+      const host = materialAt(p, f.x, anchorY(p, f.anchor) + f.y - 1e-6).use;
+      n = Math.max(n, maxIndexAt(host.material, p.wavelength, p.customMaterials) + Math.max(f.deltaN, 0));
+    }
+  }
+  return n;
 }

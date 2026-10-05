@@ -3,7 +3,7 @@
 // estimate so n_eff, mode count and mode size respond sensibly to edits. Fields are
 // Hermite–Gaussians. Every result carries isMock: true and the UI must say so.
 
-import { effectiveMeshStep, indexAtPoint, solveDomain, structureBox } from '../geometry/geometry';
+import { effectiveMeshStep, featureBox, indexAtPoint, solveDomain, structureBox, type Box } from '../geometry/geometry';
 import type { Project } from '../geometry/types';
 import type { Axis } from '../materials/types';
 import { LatestWins } from './latestWins';
@@ -36,9 +36,31 @@ function hermite(n: number, x: number): number {
   }
 }
 
+/** The mock's notion of "the core": the first shape plus any shapes within 250 nm of it (slot rails). */
+export function coreBox(p: Project): Box {
+  if (p.features.length === 0) return structureBox(p);
+  let b = featureBox(p, p.features[0]);
+  const gap = 0.25;
+  let grew = true;
+  const used = new Set([p.features[0].id]);
+  while (grew) {
+    grew = false;
+    for (const f of p.features) {
+      if (used.has(f.id)) continue;
+      const fb = featureBox(p, f);
+      if (fb.x0 <= b.x1 + gap && fb.x1 >= b.x0 - gap && fb.y0 <= b.y1 + gap && fb.y1 >= b.y0 - gap) {
+        b = { x0: Math.min(b.x0, fb.x0), x1: Math.max(b.x1, fb.x1), y0: Math.min(b.y0, fb.y0), y1: Math.max(b.y1, fb.y1) };
+        used.add(f.id);
+        grew = true;
+      }
+    }
+  }
+  return b;
+}
+
 /** Core index and surrounding index seen by one polarisation (crude: sampled around the core box). */
 function contrast(p: Project, axis: Axis) {
-  const b = structureBox(p);
+  const b = coreBox(p);
   const cx = (b.x0 + b.x1) / 2;
   const cy = (b.y0 + b.y1) / 2;
   let nCore = -Infinity;
@@ -89,8 +111,9 @@ export function mockSolve(req: SolveRequest): SolveResult {
     const na = Math.sqrt(Math.max(c.nCore ** 2 - c.nBg ** 2, 1e-8));
     const ax = (c.box.x1 - c.box.x0) / 2;
     const ay = (c.box.y1 - c.box.y0) / 2;
-    const vx = k0 * ax * na * (pol === 'TE' ? 1 : 0.92);
-    const vy = k0 * ay * na * (pol === 'TM' ? 1 : 0.92);
+    // The polarisation normal to an interface is confined less: Ex at sidewalls (TE), Ey at top/bottom (TM).
+    const vx = k0 * ax * na * (pol === 'TE' ? 0.92 : 1);
+    const vy = k0 * ay * na * (pol === 'TM' ? 0.92 : 1);
     for (const [m, n] of [[0, 0], [1, 0], [0, 1], [2, 0], [1, 1], [3, 0], [0, 2]]) {
       // Marcatili-like: (1 − b) = (1 − bx) + (1 − by); cut-off of order m at V = mπ/2.
       const bx = 1 - (((m + 1) * Math.PI) / (2 * vx + Math.PI)) ** 2;
@@ -113,14 +136,27 @@ export function mockSolve(req: SolveRequest): SolveResult {
   const chosen = (guidedOnes.length ? guidedOnes : cands.slice(0, 1)).slice(0, req.numModes);
 
   const N = nx * ny;
+  // Index maps, so the mock field decays evanescently wherever n < n_eff (e.g. into air).
+  const nmap = { TE: new Float32Array(N), TM: new Float32Array(N) };
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      nmap.TE[j * nx + i] = indexAtPoint(p, x[i], y[j], 'x');
+      nmap.TM[j * nx + i] = indexAtPoint(p, x[i], y[j], 'y');
+    }
+  }
+  const dxs = W / nx;
+  const dys = H / ny;
+
   const modes: ModeResult[] = chosen.map(({ m, n, pol, neff, guided, wx, wy, cx, cy }) => {
     const main = new Float32Array(N);
     const ez = new Float32Array(N);
+    const decay = evanescentDecay(nmap[pol], nx, ny, x, y, cx, cy, dxs, dys, k0, neff);
     for (let j = 0; j < ny; j++) {
       const v = (y[j] - cy) / wy;
       for (let i = 0; i < nx; i++) {
         const u = (x[i] - cx) / wx;
-        const val = hermite(m, Math.SQRT2 * u) * hermite(n, Math.SQRT2 * v) * Math.exp(-(u * u + v * v));
+        const val =
+          hermite(m, Math.SQRT2 * u) * hermite(n, Math.SQRT2 * v) * Math.exp(-(u * u + v * v)) * decay[j * nx + i];
         main[j * nx + i] = val;
         // Small longitudinal component ∝ transverse derivative, 90° out of phase (stored in im).
         ez[j * nx + i] = -0.15 * (pol === 'TE' ? u / wx : v / wy) * val * lam;
@@ -159,6 +195,38 @@ export function mockSolve(req: SolveRequest): SolveResult {
     },
     isMock: true,
   };
+}
+
+/**
+ * exp(−∫κ ds) with κ = k0·√(n_eff² − n²) where n < n_eff, accumulated along a path from the
+ * mode centre: horizontally along the centre row, then vertically. Crude, but it keeps mock
+ * fields out of low-index regions the way real modes behave.
+ */
+function evanescentDecay(
+  nm: Float32Array, nx: number, ny: number, x: Float64Array, y: Float64Array,
+  cx: number, cy: number, dx: number, dy: number, k0: number, neff: number,
+): Float32Array {
+  const kappa = (q: number) => k0 * Math.sqrt(Math.max(neff * neff - nm[q] * nm[q], 0));
+  const ic = Math.min(nx - 1, Math.max(0, Math.round((cx - x[0]) / dx)));
+  const jc = Math.min(ny - 1, Math.max(0, Math.round((cy - y[0]) / dy)));
+  const along = new Float64Array(nx); // accumulated along the centre row
+  for (let i = ic + 1; i < nx; i++) along[i] = along[i - 1] + kappa(jc * nx + i) * dx;
+  for (let i = ic - 1; i >= 0; i--) along[i] = along[i + 1] + kappa(jc * nx + i) * dx;
+  const out = new Float32Array(nx * ny);
+  for (let i = 0; i < nx; i++) {
+    let acc = along[i];
+    out[jc * nx + i] = Math.exp(-acc);
+    for (let j = jc + 1; j < ny; j++) {
+      acc += kappa(j * nx + i) * dy;
+      out[j * nx + i] = Math.exp(-acc);
+    }
+    acc = along[i];
+    for (let j = jc - 1; j >= 0; j--) {
+      acc += kappa(j * nx + i) * dy;
+      out[j * nx + i] = Math.exp(-acc);
+    }
+  }
+  return out;
 }
 
 /** MFD (D4σ, equal to the 1/e² diameter for a Gaussian), A_eff and boundary amplitude from a real field. */

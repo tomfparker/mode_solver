@@ -2,7 +2,7 @@
 // Results are derived (see useLiveSolve) and never stored here.
 
 import { create } from 'zustand';
-import { anchorY, uid } from '../geometry/geometry';
+import { anchorY, structureBox, uid } from '../geometry/geometry';
 import { DEFAULT_TEMPLATE_ID, buildTemplate } from '../geometry/templates';
 import type { Feature, FeatureKind, Layer, Project } from '../geometry/types';
 import type { LengthUnit } from './units';
@@ -42,6 +42,8 @@ interface State {
   selection: Selection;
   ui: UiState;
   notice: Notice | null;
+  /** Bumped when a whole new project is loaded (template, link), so the canvas re-fits. */
+  viewEpoch: number;
 
   /** Apply an edit. Edits sharing a `coalesce` key within a short window form one undo step. */
   update: (recipe: (draft: Project) => void, coalesce?: string) => void;
@@ -70,6 +72,7 @@ export const useStore = create<State>((set, get) => ({
   selection: null,
   ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: true, selectedMode: 0, advancedOpen: false },
   notice: null,
+  viewEpoch: 0,
 
   update: (recipe, coalesce) => {
     const { project, past, lastEdit } = get();
@@ -94,6 +97,7 @@ export const useStore = create<State>((set, get) => ({
       lastEdit: null,
       selection: null,
       ui: { ...get().ui, selectedMode: 0 },
+      viewEpoch: get().viewEpoch + 1,
     });
   },
 
@@ -156,6 +160,17 @@ function topAnchor(p: Project): string {
 
 export function newFeature(p: Project, kind: FeatureKind): Feature {
   const anchor = topAnchor(p);
+  const f = baseFeature(p, kind, anchor);
+  // Place it beside the existing structure rather than on top of it.
+  if (p.features.length > 0) {
+    const b = structureBox(p);
+    const half = kind === 'circle' ? 0.5 : kind === 'graded' ? 1 : 0.4;
+    f.x = Math.round((b.x1 + 0.3 + half) * 1000) / 1000;
+  }
+  return f;
+}
+
+function baseFeature(p: Project, kind: FeatureKind, anchor: string): Feature {
   const material = p.features.find((f) => f.kind !== 'graded')?.material ?? 'Si3N4';
   const id = uid('f');
   const count = p.features.length + 1;

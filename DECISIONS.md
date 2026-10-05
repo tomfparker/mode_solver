@@ -35,3 +35,44 @@ zustand (state + undo history), zod (Project schema / URL decode validation), lz
 
 ## 2026-10-04 — Mock MFD uses D4σ (second moments)
 **Why:** this equals the 1/e² diameter for a Gaussian, which is all the mock produces. The real definition for non-Gaussian modes (1/e² contour extent vs D4σ) is an M2 decision and will be logged then.
+
+## 2026-10-05 — Maintainer: semi-vector while dragging is acceptable; Solver interface accepted as-is
+Given implicitly ("let's just go to M1") after the M0 review. M2 will run semi-vector solves during drags and full-vector when editing pauses.
+
+## 2026-10-05 — Material data: refractiveindex.info (CC0), imported verbatim by script
+SiO₂ Malitson 1965 (+ Tan 1998 for the 6.7 µm limit), Si Li 293 K (tabulated, 1.2–14 µm), Si₃N₄ Luke 2015, LiNbO₃ Zelmon 1997 (o and e), air Ciddor 1996. The YAML files are copied unmodified into `data/materials/refractiveindex/`, and `scripts/import_materials.py` writes the JSON, so no coefficient is ever typed by hand.
+**Note:** upstream cites Li as "J. Phys. Chem. Ref. Data 9, … (1993)". Volume 9 is 1980; the DOI (10.1063/1.555624) is authoritative. We keep the upstream text verbatim.
+**Why:** CLAUDE.md forbids recalled values. A script import keeps provenance mechanical and auditable.
+
+## 2026-10-05 — Features are anchored to layer surfaces
+Every shape has `anchor` (a layer id or "substrate") and a y offset from that layer's top. Changing a layer thickness moves what sits on it. Deleting a layer drops its features onto the surface below (same offset). Changing a feature's anchor keeps its absolute position.
+**Why:** this matches how users think ("ridge on the slab", "core on the BOX") and makes the layer stack the primary input (UI principle 2).
+
+## 2026-10-05 — Graded-index model
+Δn·f(x)·g(y), where f is a Gaussian or an erf-broadened stripe (in-diffused stripe), and g is a Gaussian or a half-Gaussian below the surface. The canvas outline shows the 1/e extent. Template Δn values carry `deltaNIsExample`, which keeps an info warning visible until the user edits Δn.
+
+## 2026-10-05 — Custom materials are constant (n, k), stored in the project
+Lab users often have a measured index (polymer, doped glass). These are flagged in the UI as user-entered with no dispersion, and lossy ones (k > 0) as approximate.
+
+## 2026-10-05 — Solver interface change: `ModeResult.guided`
+Added so warnings can count guided modes (multimode / below cut-off). Mock and worker are both updated (the worker doesn't solve yet). M2 must define "guided" for the real solver (likely n_eff above the highest cladding/substrate index that the mode's field reaches).
+
+## 2026-10-05 — Mock solver behaviour (M1 only)
+The mock uses the real geometry, window and material indices. n_eff, mode count and mode size come from a Marcatili-style estimate around "the core" (the first shape plus any within 250 nm), and the Hermite–Gaussian fields are given an evanescent decay wherever n < n_eff. The numbers are plausible but not physical. Every result is flagged `isMock`, and the UI shows a persistent banner and a "Mock solver" chip.
+
+## 2026-10-05 — Auto window and mesh defaults
+Padding = max(1 µm, 1.5 λ, 0.75 × structure size). Mesh = longer window side / 100 (the M0 budget). Both are overridable under Advanced. M2 should revisit the mesh for thin features (a 220 nm SOI core is only a few cells at this default) together with subpixel averaging.
+
+## 2026-10-05 — Canvas and colour
+- Geometry: neutral greys that darken with refractive index, so the geometry never competes with the field colours. Materials are identified by text labels and the list, not by colour.
+- Field: |E|² on a single-hue blue ramp; signed components on a diverging blue/red ramp with a transparent zero; near-zero fades to transparent. Dark mode reverses the ramp order, so the peak stays brightest.
+- The view auto-fits on load and whenever the window no longer fits, unless the user has zoomed or panned (Fit or F resets this). It never moves during a drag.
+
+## 2026-10-05 — Undo semantics
+Each discrete edit is one undo step. A drag gesture, or a burst of arrow-key nudges in one field, coalesces into one step. Ctrl+Z inside a field commits what was typed, then undoes it (app-level undo everywhere). Loading a template is undoable.
+
+## 2026-10-05 — Single app stylesheet instead of CSS modules
+`src/app/app.css` with design tokens (light/dark). The UI is one screen with few, tightly related components, so one file is easier to keep consistent. Supersedes "plain CSS modules" in the libraries entry above.
+
+## 2026-10-05 — Scripted UI check with Selenium + the Firefox snap's geckodriver
+`scripts/ui_check.py` drives the built app in headless Firefox: editing, drag handles, undo, wavelength, templates, URL round-trip, warnings, and JS errors. It's a stopgap, because Playwright's browser downloads time out on this network. The M6 Playwright smoke test remains the target.

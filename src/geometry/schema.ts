@@ -18,6 +18,7 @@ const shapeBase = {
   name: z.string(),
   anchor: z.string(),
   deltaN: finite.optional(),
+  deltaNIsExample: z.boolean().optional(),
   ...materialUse,
 };
 
@@ -48,6 +49,7 @@ const feature = z.discriminatedUnion('kind', [
     x: finite,
     y: finite,
     deltaN: finite,
+    deltaNIsExample: z.boolean().optional(),
     profileX: z.enum(['gaussian', 'erf-strip']),
     stripWidth: nonneg,
     wx: positive,

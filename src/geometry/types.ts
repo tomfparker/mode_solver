@@ -39,6 +39,8 @@ interface ShapeBase extends MaterialUse {
   anchor: Anchor;
   /** Index offset added to the material index (e.g. a doped fibre core). Default 0. */
   deltaN?: number;
+  /** True while deltaN is a template's example value the user hasn't replaced yet. */
+  deltaNIsExample?: boolean;
 }
 
 /** Rectangle. (x, y) = bottom-centre, y relative to the anchor. */
@@ -89,6 +91,7 @@ export interface GradedFeature {
   x: number;
   y: number;
   deltaN: number;
+  deltaNIsExample?: boolean;
   profileX: 'gaussian' | 'erf-strip';
   stripWidth: number;
   wx: number;

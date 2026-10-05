@@ -60,7 +60,8 @@ src/
   materials/      # material DB loader, Sellmeier evaluation
   solver/         # Solver interface, worker client, mock solver
   coupling/       # fibre presets, lens path model (TS side: types + presentation)
-  state/          # URL encode/decode, undo
+  state/          # store (zustand, undo), URL encode/decode, units, display formatting
+  analysis/       # warnings and mode labels derived from (project, result)
 solver_py/
   modesolver/     # FD operators, eigensolve, mode post-processing
   coupling/       # fibre modes (Gaussian, LP01), overlaps, far field, lens model
@@ -149,4 +150,6 @@ npm run lint         # oxlint
 npm run e2e          # Playwright smoke tests (config arrives in M6)
 npm run spike:node   # M0 eigensolve timing in Pyodide under Node
 .venv/bin/pytest solver_py   # numerics tests (native Python)
+.venv/bin/python scripts/ui_check.py          # scripted UI check in headless Firefox (needs `npx vite preview --port 4173`)
+.venv/bin/python scripts/import_materials.py  # regenerate data/materials/*.json from the refractiveindex.info YAML
 ```
