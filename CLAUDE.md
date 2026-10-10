@@ -94,7 +94,7 @@ data/
 - Subpixel (anisotropic) index averaging at interfaces is required, not optional. Staircasing is the main accuracy risk for drawn shapes.
 - Non-uniform mesh is a later improvement. Design the operator construction so it isn't precluded.
 - Boundaries: PEC/PMC by default, PML later (for leaky modes and complex indices). Complex indices must not crash; flag them as "lossy, approximate" until PML exists.
-- Auto-size the domain from the structure plus the expected mode extent. Warn in plain language if the mode amplitude at the boundary exceeds a threshold.
+- The simulation window is **fixed by default** (templates fit it once to their structure; editing shapes doesn't move it). It is set in the left-panel Simulation section, with an "auto-size to structure" option (structure + padding, recomputed on every edit) and a one-off "Fit to structure". Warn in plain language if the mode amplitude at the boundary exceeds a threshold.
 
 ## UI principles (the UI is the priority — get these right)
 
@@ -106,7 +106,7 @@ data/
 6. **Wavelength is a global, prominent control.**
 7. **True aspect ratio**, auto-fit view, zoom, scale bar always visible.
 8. **Plain-language inline warnings**, e.g. "mode reaches boundary — enlarge window", "multimode at this λ", "large mode mismatch — consider a taper or lensed fibre (optimal waist: …)".
-9. **Progressive disclosure:** mesh, domain, boundary conditions and solver type live under "Advanced" with good auto defaults.
+9. **Progressive disclosure:** the left-panel Simulation section shows the window and mode count; mesh, boundary conditions, solver type and n guess sit in its collapsed "Solver and mesh" part with good auto defaults.
 10. **Loss waterfall** for coupling: mode shape / magnification / NA clipping / Fresnel / total, each in dB and %.
 11. Desktop-first. It should not break on a tablet; phones are not a target.
 

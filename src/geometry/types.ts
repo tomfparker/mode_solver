@@ -90,11 +90,24 @@ export type FeatureKind = Feature['kind'];
 
 export type Auto<T> = T | 'auto';
 
+/** Axis-aligned window, µm. */
+export interface WindowBox {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
 export interface SolverSettings {
+  /**
+   * Simulation window. A fixed box stays put while shapes are edited; 'auto' resizes it to the
+   * structure plus `padding` on every change. Absent (older links) means 'auto'.
+   */
+  window?: Auto<WindowBox>;
   solverKind: Auto<SolverKind>;
   /** Grid step, µm. Auto: ~100 cells along the longer side of the domain. */
   meshStep: Auto<number>;
-  /** Space between the structure and the window edge, µm. Auto grows with λ. */
+  /** Auto-sized window only: space between the structure and the window edge, µm. Auto grows with λ. */
   padding: Auto<number>;
   boundary: Auto<'pec' | 'pmc'>;
   numModes: number;

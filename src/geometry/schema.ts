@@ -53,6 +53,11 @@ export const projectSchema = z.object({
   features: z.array(feature),
   customMaterials: z.array(z.object({ id: z.string().startsWith('custom:'), name: z.string(), n: positive, k: nonneg })),
   settings: z.object({
+    window: auto(
+      z
+        .object({ x0: finite, x1: finite, y0: finite, y1: finite })
+        .refine((b) => b.x1 > b.x0 && b.y1 > b.y0, 'window must have positive width and height'),
+    ).optional(),
     solverKind: auto(z.enum(['scalar', 'semivector-te', 'semivector-tm', 'fullvector'])),
     meshStep: auto(positive),
     padding: auto(positive),

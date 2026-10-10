@@ -100,3 +100,9 @@ The maintainer calls it a run button.
 - **Version-1 links migrate automatically**: cladding → background; substrate → a 100 µm-deep full-width rectangle; layers → full-width rectangles; anchored shapes → absolute y.
 - The mock's "core" is now the highest-index finite shape (plus neighbours within 250 nm).
 Supersedes the 2026-10-05 "features are anchored to layer surfaces" and 2026-10-10 "one structure list (option A)" entries.
+
+## 2026-10-10 — Maintainer: fixed simulation window by default; settings in a left-panel Simulation section
+- `settings.window` is either a fixed box or 'auto'. Templates open with a fixed window fitted to their structure, so resizing or moving the core no longer rescales the window (or the mesh, which follows the window). This keeps results comparable between edits.
+- The left-panel "Simulation" section has an **auto-size to structure** tick box. When ticked it shows padding; when unticked it shows width, height, centre x/y and a one-off "Fit to structure". It also holds the mode count, and a collapsed "Solver and mesh" part (solver, mesh step, boundary, n guess) that replaces the right panel's Advanced section.
+- The boundary warning's fix enlarges a fixed window by 50% about its centre (or raises the padding when auto).
+- Links without `settings.window` (older v2 links) load as auto-sized, matching how they behaved when made. No version bump is needed: the field is optional.

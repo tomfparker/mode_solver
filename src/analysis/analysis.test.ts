@@ -60,8 +60,13 @@ describe('computeWarnings', () => {
   it('flags a mode reaching the window edge, with a fix action', () => {
     const w = computeWarnings(p, result([mode({ boundaryAmplitude: BOUNDARY_THRESHOLD * 2 })]));
     const b = w.find((x) => x.id === 'boundary')!;
-    expect(b.action?.kind).toBe('increase-padding');
-    expect(b.action!.padding).toBeGreaterThan(0);
+    // Templates open with a fixed window, so the fix enlarges it about its centre.
+    expect(b.action?.kind).toBe('set-window');
+    if (b.action?.kind !== 'set-window') return;
+    expect(b.action.window.x1 - b.action.window.x0).toBeGreaterThan(0);
+    const q = { ...p, settings: { ...p.settings, window: 'auto' as const } };
+    const a = computeWarnings(q, result([mode({ boundaryAmplitude: BOUNDARY_THRESHOLD * 2 })])).find((x) => x.id === 'boundary')!.action;
+    expect(a?.kind).toBe('increase-padding');
   });
 
   it('flags λ outside a material’s data range (Si table starts at 1.2 µm)', () => {

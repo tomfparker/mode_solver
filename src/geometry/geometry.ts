@@ -100,11 +100,22 @@ export function effectivePadding(p: Project): number {
   return Math.max(1.0, 1.5 * p.wavelength, 0.75 * size);
 }
 
-/** Simulation window: the structure plus padding on every side. */
-export function solveDomain(p: Project): Box {
+/** Window sized to the structure plus padding (what "auto-size" gives, and "Fit to structure" sets). */
+export function autoDomain(p: Project): Box {
   const b = structureBox(p);
   const pad = effectivePadding(p);
-  return { x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad };
+  const r = (v: number) => Math.round(v * 1000) / 1000;
+  return { x0: r(b.x0 - pad), x1: r(b.x1 + pad), y0: r(b.y0 - pad), y1: r(b.y1 + pad) };
+}
+
+export function isAutoWindow(p: Project): boolean {
+  return p.settings.window === undefined || p.settings.window === 'auto';
+}
+
+/** Simulation window: the fixed box if set, otherwise auto-sized to the structure. */
+export function solveDomain(p: Project): Box {
+  const w = p.settings.window;
+  return w && w !== 'auto' ? { ...w } : autoDomain(p);
 }
 
 /** Grid step: ~100 cells along the longer side (the M0 performance budget) unless overridden. */

@@ -9,6 +9,7 @@ import { addFeature, addLayer, moveFeature, useStore } from '../state/store';
 import { formatLength } from '../state/units';
 import { geoFill } from './geoFill';
 import { NumberField, TextField } from './inputs';
+import { SimulationPanel } from './SimulationPanel';
 
 const KIND_LABEL: Record<FeatureKind, string> = {
   rect: 'Rectangle',
@@ -22,6 +23,11 @@ function materialName(p: Project, id: string) {
   return materialInfo(id, p.customMaterials)?.name ?? id;
 }
 
+/** "SiO₂ (fused silica)" → "SiO₂" for compact list rows. */
+function shortName(p: Project, id: string) {
+  return materialName(p, id).replace(/\s*\(.*\)\s*$/, '');
+}
+
 function Swatch({ p, use }: { p: Project; use?: MaterialUse }) {
   const n = use ? maxIndexAt(use.material, p.wavelength, p.customMaterials) : 1;
   return <span className="swatch" style={{ background: use ? geoFill(n) : 'repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, transparent 3px 6px)' }} />;
@@ -29,8 +35,8 @@ function Swatch({ p, use }: { p: Project; use?: MaterialUse }) {
 
 function meta(p: Project, f: Feature, unit: 'nm' | 'um'): string {
   if (f.kind === 'graded') return `Δn ${f.deltaN}`;
-  if (isFullWidth(f)) return `${materialName(p, f.material)} · ${f.height >= 10 ? 'deep' : formatLength(f.height, unit)}`;
-  return materialName(p, f.material);
+  if (isFullWidth(f)) return `${shortName(p, f.material)} · ${f.height >= 10 ? 'deep' : formatLength(f.height, unit)}`;
+  return shortName(p, f.material);
 }
 
 export function StructurePanel() {
@@ -116,7 +122,7 @@ export function StructurePanel() {
             title="Fills the whole plane wherever there is no shape"
           >
             <Swatch p={project} use={project.background} />
-            <span className="name">Background · {materialName(project, project.background.material)}</span>
+            <span className="name">Background · {shortName(project, project.background.material)}</span>
             <span className="meta">everywhere</span>
           </div>
         </div>
@@ -131,6 +137,8 @@ export function StructurePanel() {
           ))}
         </div>
       </section>
+
+      <SimulationPanel />
 
       <CustomMaterials />
     </aside>

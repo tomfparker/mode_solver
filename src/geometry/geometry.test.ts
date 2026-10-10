@@ -1,10 +1,10 @@
 import { compressToEncodedURIComponent } from 'lz-string';
 import { describe, expect, it } from 'vitest';
 import { decodeHash } from '../state/url';
-import { indexAtPoint, materialAt, solveDomain, structureBox } from './geometry';
+import { autoDomain, indexAtPoint, isAutoWindow, materialAt, solveDomain, structureBox } from './geometry';
 import { MIGRATED_SUBSTRATE_DEPTH } from './schema';
 import { buildTemplate } from './templates';
-import type { RectFeature } from './types';
+import type { Project, RectFeature } from './types';
 
 describe('background + shapes', () => {
   const p = buildTemplate('sin-strip');
@@ -65,5 +65,43 @@ describe('v1 links (layer stack) are migrated', () => {
     expect(box).toMatchObject({ material: 'SiO2', fullWidth: true, y: 0, height: 3 });
     expect(core).toMatchObject({ material: 'Si3N4', y: 3.1 });
     expect('anchor' in core).toBe(false);
+  });
+});
+
+describe('simulation window', () => {
+  const grow = (p: Project) => Object.assign(p.features.find((f) => f.name === 'Core')!, { width: 3 });
+
+  it('templates open with a fixed window fitted to the structure', () => {
+    const p = buildTemplate('sin-strip');
+    expect(isAutoWindow(p)).toBe(false);
+    expect(solveDomain(p)).toEqual(autoDomain(p));
+  });
+
+  it('a fixed window does not change when the core is resized', () => {
+    const p = buildTemplate('sin-strip');
+    const before = solveDomain(p);
+    grow(p);
+    expect(solveDomain(p)).toEqual(before);
+  });
+
+  it('an auto window follows the structure', () => {
+    const p = buildTemplate('sin-strip');
+    p.settings.window = 'auto';
+    const before = solveDomain(p);
+    grow(p);
+    expect(solveDomain(p).x1 - solveDomain(p).x0).toBeGreaterThan(before.x1 - before.x0);
+  });
+
+  it('links without a window setting load as auto-sized', () => {
+    const p = buildTemplate('sin-strip');
+    delete p.settings.window;
+    const r = decodeHash('#p=' + compressToEncodedURIComponent(JSON.stringify(p)));
+    expect(r.ok === true && isAutoWindow(r.project)).toBe(true);
+  });
+
+  it('rejects an inside-out window', () => {
+    const p = buildTemplate('sin-strip');
+    p.settings.window = { x0: 1, x1: 0, y0: 0, y1: 1 };
+    expect(decodeHash('#p=' + compressToEncodedURIComponent(JSON.stringify(p))).ok).toBe(false);
   });
 });

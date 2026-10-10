@@ -193,7 +193,7 @@ button, input, select { font: inherit; color: inherit; }
 .row.selected { border-color: var(--accent); background: var(--accent-soft); }
 .row .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--geo-stroke); }
 .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .meta { color: var(--text-3); font-size: 12px; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; justify-self: end; }
+.row .meta { color: var(--text-3); font-size: 12px; white-space: nowrap; }
 .row.semi .name { color: var(--text-2); font-style: italic; }
 .row.shape { margin-left: 14px; }
 .row[draggable='true'] { cursor: grab; }
@@ -284,6 +284,7 @@ select.field { padding: 2px 4px; }
 .thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .thumb.unguided { opacity: 0.6; }
 .thumb .img { width: 100%; aspect-ratio: 1; background: var(--surface-2); border-radius: 4px; display: block; object-fit: contain; }
+.thumb .img[src=''] { visibility: hidden; }
 .thumb .lbl { display: flex; flex-direction: column; font-size: 11.5px; margin-top: 3px; line-height: 1.25; }
 .thumb .lbl b { font-weight: 600; }
 

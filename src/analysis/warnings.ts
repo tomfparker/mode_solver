@@ -1,13 +1,16 @@
 // Plain-language warnings derived from (project, result). Pure: tested in warnings.test.ts.
 
-import { effectivePadding, usedMaterials } from '../geometry/geometry';
+import { effectivePadding, isAutoWindow, solveDomain, usedMaterials } from '../geometry/geometry';
+import type { WindowBox } from '../geometry/types';
 import type { Project } from '../geometry/types';
 import { indexAt, materialInfo } from '../materials/library';
 import { fmtWavelengthNm } from '../state/format';
 import type { SolveResult } from '../solver/types';
 import { labelModes } from './modeLabels';
 
-export type WarningAction = { kind: 'increase-padding'; label: string; padding: number };
+export type WarningAction =
+  | { kind: 'increase-padding'; label: string; padding: number }
+  | { kind: 'set-window'; label: string; window: WindowBox };
 
 export interface Warning {
   id: string;
@@ -99,20 +102,35 @@ export function computeWarnings(p: Project, result: SolveResult | null): Warning
         tone: 'warn',
         text:
           `Multimode at ${lam}: ${capped ? 'at least ' : ''}${guided.length} guided modes (${which}).` +
-          (capped ? ' Raise “Modes” under Advanced to find them all.' : ''),
+          (capped ? ' Raise “Modes” in the Simulation panel to find them all.' : ''),
       });
     }
   }
 
   const worst = Math.max(...result.modes.filter((m) => m.guided).map((m) => m.boundaryAmplitude), 0);
   if (worst > BOUNDARY_THRESHOLD) {
-    const pad = effectivePadding(p);
-    const next = Math.round(pad * 1.5 * 100) / 100;
+    let action: WarningAction;
+    if (isAutoWindow(p)) {
+      const next = Math.round(effectivePadding(p) * 1.5 * 100) / 100;
+      action = { kind: 'increase-padding', label: `Set padding to ${next} µm`, padding: next };
+    } else {
+      const d = solveDomain(p);
+      const cx = (d.x0 + d.x1) / 2;
+      const cy = (d.y0 + d.y1) / 2;
+      const r = (v: number) => Math.round(v * 1000) / 1000;
+      const hw = ((d.x1 - d.x0) / 2) * 1.5;
+      const hh = ((d.y1 - d.y0) / 2) * 1.5;
+      action = {
+        kind: 'set-window',
+        label: 'Enlarge window by 50%',
+        window: { x0: r(cx - hw), x1: r(cx + hw), y0: r(cy - hh), y1: r(cy + hh) },
+      };
+    }
     out.push({
       id: 'boundary',
       tone: 'warn',
       text: 'A mode reaches the edge of the simulation window, so its size and n_eff may be wrong. Enlarge the window.',
-      action: { kind: 'increase-padding', label: `Set padding to ${next} µm`, padding: next },
+      action,
     });
   }
 

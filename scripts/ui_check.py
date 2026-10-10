@@ -181,21 +181,25 @@ try:
     d.get("about:blank"); d.get(URL + "#p=garbage")
     ok("broken link shows notice and default example", wait(lambda: "Couldn" in d.find_element(By.CSS_SELECTOR, ".notice").text))
 
-    # Advanced: padding small → boundary warning
+    # Simulation window: fixed by default (resizing the core leaves it alone), editable in the left panel
     d.get("about:blank"); d.get(URL)
     wait(lambda: neff0())
-    d.find_element(By.XPATH, "//summary[contains(text(),'Advanced')]").click()
-    auto = d.find_element(By.XPATH, "//input[@aria-label='Padding']/ancestor::span[@class='auto-row']//input[@type='checkbox']")
-    auto.click()
-    pad = d.find_element(By.CSS_SELECTOR, "input[aria-label='Padding']")
-    pad.send_keys(Keys.CONTROL, "a"); pad.send_keys("200 nm", Keys.ENTER)
+    ww = lambda: d.find_element(By.CSS_SELECTOR, "input[aria-label='Window width']").get_attribute("value")
+    w0 = wait(lambda: ww())
+    d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
+    cw = d.find_element(By.CSS_SELECTOR, "input[aria-label='Width']")
+    cw.send_keys(Keys.CONTROL, "a"); cw.send_keys("2000", Keys.ENTER)
+    time.sleep(0.3)
+    ok("resizing the core leaves a fixed window unchanged", ww() == w0, f"{w0} → {ww()}")
+    win = d.find_element(By.CSS_SELECTOR, "input[aria-label='Window width']")
+    win.send_keys(Keys.CONTROL, "a"); win.send_keys("1500", Keys.ENTER)
     click_solve()
-    ok("tiny padding triggers boundary warning", wait(lambda: "reaches the edge" in d.find_element(By.CSS_SELECTOR, ".panel-right").text))
+    ok("a too-small window triggers the boundary warning", wait(lambda: "reaches the edge" in d.find_element(By.CSS_SELECTOR, ".panel-right").text))
     shot("drive-5-boundary")
-    btn = d.find_elements(By.XPATH, "//button[starts-with(text(),'Set padding')]")
-    if btn: btn[0].click()
-    ok("fix button applies padding", wait(lambda: d.find_element(By.CSS_SELECTOR, "input[aria-label='Padding']").get_attribute("value") == "300"),
-       d.find_element(By.CSS_SELECTOR, "input[aria-label='Padding']").get_attribute("value"))
+    d.find_element(By.XPATH, "//button[starts-with(., 'Enlarge window')]").click()
+    ok("fix button enlarges the window by 50%", wait(lambda: ww() == "2250"), ww())
+    d.find_element(By.CSS_SELECTOR, "input[aria-label='Auto-size window to structure']").click()
+    ok("auto-size shows padding instead of window size", wait(lambda: d.find_elements(By.CSS_SELECTOR, "input[aria-label='Padding']")) and not d.find_elements(By.CSS_SELECTOR, "input[aria-label='Window width']"))
 
     # Field component switch
     Select(d.find_element(By.ID, "fieldview")).select_by_value("Ex")

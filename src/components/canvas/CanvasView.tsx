@@ -344,7 +344,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
         <rect x={dx0} y={dy1} width={dx1 - dx0} height={dy0 - dy1} fill="none" stroke="var(--text-3)" strokeDasharray="2 4" pointerEvents="none" />
         <text className="canvas-label" x={dx1 - 6} y={dy0 - 6} textAnchor="end" style={{ pointerEvents: 'auto', cursor: 'help' }}>
           Simulation window
-          <title>The solver computes modes only inside this window; its edges act as walls. Size it under Advanced → Padding.</title>
+          <title>The solver computes modes only inside this window; its edges act as walls. Set its size in the Simulation panel on the left.</title>
         </text>
 
         {/* Outlines on top of the field; also the hit areas (topmost shape gets the click) */}

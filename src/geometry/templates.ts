@@ -3,7 +3,7 @@
 // except Δn values on fibre cores and diffused guides, which are example values the user
 // is expected to replace (the UI says so).
 
-import { uid } from './geometry';
+import { autoDomain, uid } from './geometry';
 import type { Feature, MaterialUse, Project, SolverSettings } from './types';
 
 export const DEFAULT_SETTINGS: SolverSettings = {
@@ -23,7 +23,7 @@ export interface Template {
 }
 
 function base(name: string, wavelength = 1.55): Omit<Project, 'background' | 'features'> {
-  return { version: 2, name, wavelength, customMaterials: [], settings: { ...DEFAULT_SETTINGS } };
+  return { version: 2, name, wavelength, customMaterials: [], settings: { ...DEFAULT_SETTINGS, window: 'auto' } };
 }
 
 /** Substrates are full-width rectangles this deep: far beyond any solve window (semi-infinite in effect). */
@@ -38,7 +38,7 @@ function substrate(use: MaterialUse, top: number): Feature {
   return slab('Substrate', use, top - SUBSTRATE_DEPTH, SUBSTRATE_DEPTH);
 }
 
-export const TEMPLATES: Template[] = [
+const RAW_TEMPLATES: Template[] = [
   {
     id: 'sin-strip',
     name: 'SiN strip',
@@ -167,6 +167,14 @@ export const TEMPLATES: Template[] = [
     },
   },
 ];
+
+/** Templates open with a fixed window fitted to their structure, so editing shapes doesn't move it. */
+function withFixedWindow(p: Project): Project {
+  p.settings.window = autoDomain(p);
+  return p;
+}
+
+export const TEMPLATES: Template[] = RAW_TEMPLATES.map((t) => ({ ...t, build: () => withFixedWindow(t.build()) }));
 
 export const DEFAULT_TEMPLATE_ID = 'sin-strip';
 
