@@ -70,8 +70,8 @@ describe('mockSolve', () => {
   it('shrinking the core reduces the number of guided modes', () => {
     const big = buildTemplate('sin-strip');
     const small = buildTemplate('sin-strip');
-    Object.assign(big.features[0], { width: 3, height: 1.5 });
-    Object.assign(small.features[0], { width: 0.6, height: 0.4 });
+    Object.assign(big.features.find((f) => f.name === 'Core')!, { width: 3, height: 1.5 });
+    Object.assign(small.features.find((f) => f.name === 'Core')!, { width: 0.6, height: 0.4 });
     big.settings.numModes = 12;
     small.settings.numModes = 12;
     const nb = mockSolve({ id: 'b', project: big, numModes: 12 }).modes.filter((m) => m.guided).length;

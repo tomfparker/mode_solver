@@ -1,24 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { anchorY } from '../geometry/geometry';
-import type { RectFeature } from '../geometry/types';
 import { buildTemplate } from '../geometry/templates';
-import { addFeature, deleteLayer, patchFeature, patchLayer, stepInList, useStore } from './store';
+import type { RectFeature } from '../geometry/types';
+import { addFeature, addLayer, deleteFeature, duplicateFeature, patchFeature, stepFeature, useStore } from './store';
 
 beforeEach(() => {
   useStore.getState().replaceProject(buildTemplate('sin-strip'));
 });
 
-const core = () => useStore.getState().project.features[0];
+const core = () => useStore.getState().project.features.find((f) => f.name === 'Core') as RectFeature;
+const ids = () => useStore.getState().project.features.map((f) => f.id);
 
 describe('undo/redo', () => {
   it('undoes and redoes a single edit', () => {
-    const w0 = (core() as RectFeature).width;
+    const w0 = core().width;
     patchFeature(core().id, { width: 2 });
-    expect(core()).toMatchObject({ width: 2 });
+    expect(core().width).toBe(2);
     useStore.getState().undo();
-    expect(core()).toMatchObject({ width: w0 });
+    expect(core().width).toBe(w0);
     useStore.getState().redo();
-    expect(core()).toMatchObject({ width: 2 });
+    expect(core().width).toBe(2);
   });
 
   it('coalesces a drag (same key) into one undo step', () => {
@@ -26,7 +26,7 @@ describe('undo/redo', () => {
     for (let i = 1; i <= 10; i++) patchFeature(id, { x: i * 0.1 }, 'drag-1');
     expect(useStore.getState().past).toHaveLength(1);
     useStore.getState().undo();
-    expect(core()).toMatchObject({ x: 0 });
+    expect(core().x).toBe(0);
   });
 
   it('does not coalesce different keys or edits after the time window', () => {
@@ -48,33 +48,44 @@ describe('undo/redo', () => {
   });
 });
 
-describe('layer-anchored features', () => {
-  it('move with their layer when its thickness changes', () => {
-    const p0 = useStore.getState().project;
-    const box = p0.stack.layers[0];
-    patchLayer(box.id, { thickness: box.thickness + 1 });
-    const p1 = useStore.getState().project;
-    expect(anchorY(p1, core().anchor)).toBeCloseTo(anchorY(p0, core().anchor) + 1, 12);
+describe('structure list', () => {
+  it('stepping a shape changes what is drawn on top', () => {
+    const before = ids();
+    stepFeature(core().id, -1);
+    expect(ids().indexOf(core().id)).toBe(before.indexOf(core().id) - 1);
+    stepFeature(core().id, -1);
+    stepFeature(core().id, -1);
+    expect(ids()[0]).toBe(core().id); // clamps at the bottom
   });
 
-  it('drop onto the surface below when their layer is deleted', () => {
-    const box = useStore.getState().project.stack.layers[0];
-    deleteLayer(box.id);
-    expect(core().anchor).toBe('substrate');
+  it('addLayer puts a full-width layer on top of the existing layers, below finite shapes', () => {
+    addLayer();
+    const fs = useStore.getState().project.features;
+    const added = fs.find((f) => f.name.startsWith('Layer')) as RectFeature;
+    expect(added.fullWidth).toBe(true);
+    expect(added.y).toBe(0); // top of the BOX
+    expect(fs.indexOf(added)).toBeLessThan(fs.findIndex((f) => f.name === 'Core'));
   });
 
-  it('move to the next layer down when stepped below their layer in the list', () => {
-    const p0 = useStore.getState().project;
-    expect(core().anchor).toBe(p0.stack.layers[0].id);
-    stepInList(`feature:${core().id}`, 1);
-    expect(core().anchor).toBe('substrate');
-    useStore.getState().undo();
-    expect(core().anchor).toBe(p0.stack.layers[0].id);
+  it('addFeature selects the new shape and opens its editor', () => {
+    addFeature('circle');
+    const s = useStore.getState();
+    expect(s.selection).toEqual({ type: 'feature', id: s.project.features.at(-1)!.id });
+    expect(s.ui.editorOpen).toBe(true);
   });
-});
 
-it('addFeature selects the new feature', () => {
-  addFeature('circle');
-  const s = useStore.getState();
-  expect(s.selection).toEqual({ type: 'feature', id: s.project.features.at(-1)!.id });
+  it('duplicating a layer stacks the copy on top of it', () => {
+    const box = useStore.getState().project.features.find((f) => f.name === 'BOX') as RectFeature;
+    duplicateFeature(box.id);
+    const copy = useStore.getState().project.features.find((f) => f.name === 'BOX copy') as RectFeature;
+    expect(copy.y).toBeCloseTo(box.y + box.height, 9);
+  });
+
+  it('deleting the selected shape closes its editor', () => {
+    useStore.getState().select({ type: 'feature', id: core().id });
+    useStore.getState().setUi({ editorOpen: true });
+    deleteFeature(core().id);
+    expect(useStore.getState().selection).toBeNull();
+    expect(useStore.getState().ui.editorOpen).toBe(false);
+  });
 });

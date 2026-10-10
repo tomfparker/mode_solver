@@ -115,21 +115,28 @@ try:
     x = d.find_element(By.CSS_SELECTOR, "input[aria-label='x (centre)']").get_attribute("value")
     ok("dragging the body moves x", x not in ("0", ""), x)
 
-    # Layer edge drag: BOX thickness
-    edge = d.find_element(By.CSS_SELECTOR, "line[data-kind='layer-edge']")
-    ActionChains(d).move_to_element(edge).click_and_hold().move_by_offset(0, 30).move_by_offset(0, 30).release().perform()
-    meta = d.find_element(By.XPATH, "//div[@role='listitem'][.//span[contains(text(),'BOX')]]/span[contains(@class,'meta')]").text
-    ok("dragging BOX top edge changes its thickness", meta != "4000 nm", meta)
+    # Pop-up editor: open by clicking a shape on the canvas, close with Escape
+    ok("clicking a shape opens its pop-up editor", wait(lambda: d.find_elements(By.CSS_SELECTOR, ".editor-pop [role='dialog']")))
+    d.find_element(By.CSS_SELECTOR, ".panel-right").click()
+    ActionChains(d).send_keys(Keys.ESCAPE).perform()
+    ok("Escape closes the pop-up", wait(lambda: not d.find_elements(By.CSS_SELECTOR, ".editor-pop")))
 
-    # Structure list: moving the core down below the BOX makes it sit on the substrate
+    # Layer (full-width shape) thickness: drag the BOX's top handle
+    d.find_element(By.XPATH, "//div[@role='listitem'][.//span[contains(., 'BOX')]]").click()
+    top = wait(lambda: [h for h in d.find_elements(By.CSS_SELECTOR, "circle.handle") if h.get_attribute("data-id") == "t"][0])
+    ActionChains(d).click_and_hold(top).move_by_offset(0, 30).move_by_offset(0, 30).release().perform()
+    meta = d.find_element(By.XPATH, "//div[@role='listitem'][.//span[contains(., 'BOX')]]/span[contains(@class,'meta')]").text
+    ok("dragging the BOX top handle changes its thickness", "4000 nm" not in meta, meta)
+    ActionChains(d).key_down(Keys.CONTROL).send_keys("z").key_up(Keys.CONTROL).perform()
+
+    # Structure list order = drawing order
+    order = lambda: [e.text.split(" ·")[0].replace("▭", "").strip() for e in d.find_elements(By.CSS_SELECTOR, "div[role='listitem'] .name")]
+    ok("list shows Core above BOX above Substrate, Background last", order()[:3] == ["Core", "BOX", "Substrate"] and order()[-1] == "Background", " / ".join(order()))
     d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
-    d.find_element(By.XPATH, "//button[contains(., 'Move down')]").click()
-    sits = lambda: Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Sits on']")).first_selected_option.text
-    ok("Move down below BOX → sits on substrate", wait(lambda: "substrate" in sits()), sits())
-    order = [e.text.split(" ·")[0] for e in d.find_elements(By.CSS_SELECTOR, "div[role='listitem'] .name")]
-    ok("list order shows Core under BOX", order.index("Core") > order.index("BOX"), " / ".join(order))
-    d.find_element(By.XPATH, "//button[contains(., 'Move up')]").click()
-    ok("Move up → back on BOX", wait(lambda: "BOX" in sits()), sits())
+    d.find_element(By.XPATH, "//div[contains(@class,'editor-pop')]//button[contains(., 'Down')]").click()
+    ok("↓ Down moves Core below BOX in the list", wait(lambda: order().index("Core") > order().index("BOX")), " / ".join(order()))
+    d.find_element(By.XPATH, "//div[contains(@class,'editor-pop')]//button[contains(., 'Up')]").click()
+    ok("↑ Up restores it", wait(lambda: order()[0] == "Core"), " / ".join(order()))
 
     # Wavelength chip 780 → Si out-of-range warning (substrate Si)
     wl = d.find_element(By.ID, "wavelength")
@@ -167,8 +174,8 @@ try:
     h = hash_()
     time.sleep(0.6); h = hash_()
     d.get("about:blank"); d.get(URL + h)
-    ok("reload from URL restores project (5+ shapes)", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, ".row.shape")) >= 6),
-       str(len(d.find_elements(By.CSS_SELECTOR, ".row.shape"))))
+    rows = lambda: len(d.find_elements(By.CSS_SELECTOR, "div[role='listitem']"))
+    ok("reload from URL restores project (template + 5 shapes)", wait(lambda: rows() >= 9), str(rows()))
 
     # Broken link
     d.get("about:blank"); d.get(URL + "#p=garbage")

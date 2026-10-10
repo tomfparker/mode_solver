@@ -1,9 +1,10 @@
 // Project model. All lengths in µm; wavelength is the vacuum wavelength.
-// Coordinates: x horizontal, y vertical (growth direction), z propagation. y = 0 is the top
-// of the substrate. Layers stack upwards from there.
+// Coordinates: x horizontal, y vertical (growth direction), z propagation. All shape
+// coordinates are absolute.
 //
-// Features are positioned relative to an anchor: the top surface of a layer (or of the
-// substrate). Changing a layer's thickness moves everything that sits on it.
+// The structure is a background material filling the plane plus an ordered list of shapes.
+// Later shapes are on top (they win where shapes overlap). Substrates, BOX layers and films
+// are full-width rectangles: they span the whole plane horizontally.
 
 import type { Axis, CustomMaterial } from '../materials/types';
 import type { SolverKind } from '../solver/kinds';
@@ -18,38 +19,23 @@ export interface MaterialUse {
   opticAxis?: Axis;
 }
 
-export interface Layer extends MaterialUse {
-  id: string;
-  name: string;
-  thickness: number;
-}
-
-export interface LayerStack {
-  substrate: MaterialUse; // semi-infinite below y = 0
-  layers: Layer[]; // bottom → top
-  cladding: MaterialUse; // semi-infinite above the top layer
-}
-
-/** 'substrate' = y = 0, otherwise the id of a layer whose top surface is the reference. */
-export type Anchor = string;
-
 interface ShapeBase extends MaterialUse {
   id: string;
   name: string;
-  anchor: Anchor;
   /** Index offset added to the material index (e.g. a doped fibre core). Default 0. */
   deltaN?: number;
   /** True while deltaN is a template's example value the user hasn't replaced yet. */
   deltaNIsExample?: boolean;
 }
 
-/** Rectangle. (x, y) = bottom-centre, y relative to the anchor. */
+/** Rectangle. (x, y) = bottom-centre. With fullWidth it spans the whole plane horizontally (a layer). */
 export interface RectFeature extends ShapeBase {
   kind: 'rect';
   x: number;
   y: number;
   width: number;
   height: number;
+  fullWidth?: boolean;
 }
 
 /** Symmetric trapezoid (etched ridge). (x, y) = bottom-centre. */
@@ -62,7 +48,7 @@ export interface TrapezoidFeature extends ShapeBase {
   height: number;
 }
 
-/** Circle. (x, y) = centre, y relative to the anchor. */
+/** Circle. (x, y) = centre. */
 export interface CircleFeature extends ShapeBase {
   kind: 'circle';
   x: number;
@@ -70,7 +56,7 @@ export interface CircleFeature extends ShapeBase {
   radius: number;
 }
 
-/** Polygon. Vertices relative to (x, y), which is relative to the anchor. */
+/** Polygon. Vertices relative to (x, y). */
 export interface PolygonFeature extends ShapeBase {
   kind: 'polygon';
   x: number;
@@ -81,13 +67,12 @@ export interface PolygonFeature extends ShapeBase {
 /**
  * Graded-index region (diffused / laser-written guides): adds Δn·f(x)·g(y) to whatever is
  * there. f is a Gaussian exp(−(x/wx)²), or an erf-broadened strip of `stripWidth` (in-diffused
- * stripe). g is a Gaussian exp(−(y/wy)²), or a half-Gaussian only below the anchor surface.
+ * stripe). g is a Gaussian exp(−(y/wy)²), or a half-Gaussian only below y (surface diffusion).
  */
 export interface GradedFeature {
   kind: 'graded';
   id: string;
   name: string;
-  anchor: Anchor;
   x: number;
   y: number;
   deltaN: number;
@@ -117,13 +102,15 @@ export interface SolverSettings {
   nGuess: Auto<number>;
 }
 
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
 export interface Project {
   version: typeof PROJECT_VERSION;
   name: string;
   wavelength: number;
-  stack: LayerStack;
+  /** Fills the whole plane wherever no shape is. */
+  background: MaterialUse;
+  /** Bottom → top: later shapes are drawn over (and replace) earlier ones. */
   features: Feature[];
   customMaterials: CustomMaterial[];
   settings: SolverSettings;

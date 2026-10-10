@@ -56,7 +56,7 @@ Suggested layout (adjust if there's good reason, and update this file):
 src/
   app/            # layout, routing, top-level state
   components/     # panels: StructurePanel, Canvas, ResultsPanel, CouplingPath
-  geometry/       # Project types, shapes, layer stack, rasterisation + subpixel averaging
+  geometry/       # Project types (background + ordered shapes), templates, rasterisation + subpixel averaging
   materials/      # material DB loader, Sellmeier evaluation
   solver/         # Solver interface, worker client, mock solver
   coupling/       # fibre presets, lens path model (TS side: types + presentation)
@@ -99,7 +99,7 @@ data/
 ## UI principles (the UI is the priority — get these right)
 
 1. **Numbers are the source of truth; drawing is an input method.** Every object is a list entry with editable numeric parameters. Canvas drag handles and numeric fields edit the same object. Snapping, plus nm-level entry.
-2. **Layer stack first, shapes second, in one list.** Infinite slabs (substrate, BOX, film, cladding) plus a few features. Most structures need no drawing at all. Layers and shapes share one structure list ordered like the cross-section; a shape sits on the layer below it in the list, and dragging rows restacks.
+2. **Background + shapes, one ordered list.** A background material fills the plane; everything else (substrate, BOX, films, cores) is a shape. Rectangles can be "full width" (span the whole plane horizontally): that is how layers are made. List order decides what is on top. Click a shape (canvas or list) to open its pop-up editor (coordinates, size, material); drag shapes and handles with the mouse. The solve window is sized from finite shapes only. *(Replaced the layer-stack model at the maintainer's request, 2026-10-10.)*
 3. **Run button, results never blocked.** A prominent Run button (Ctrl+Enter); after an edit the previous result stays visible, dimmed and marked out of date. Newly loaded projects solve automatically. Show the field overlaid on geometry outlines in the main canvas (|E|², Ex, Ey, Ez, Hx… toggle; 1/e² contour). *(Changed from live solving at the maintainer's request, 2026-10-10.)*
 4. **Never a blank canvas.** Open on a working example (SiN strip at 1550 nm). Templates: strip, rib, slot, step-index fibre, diffused channel, LN ridge.
 5. **One screen, three zones:** structure (left) | canvas (centre) | results + mode thumbnails + warnings (right). The coupling path strip sits below the results.

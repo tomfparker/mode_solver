@@ -1,55 +1,57 @@
 // Drag handles and snapping for canvas editing. Pure functions: the canvas component turns
 // pointer moves into calls to applyDrag, and the result is written to the same store fields
-// the numeric inputs edit.
+// the pop-up editor edits.
 
-import { anchorY, featureBox, gradedExtent, layerBounds, shapePolygon } from '../../geometry/geometry';
+import { featureBox, gradedExtent, isFullWidth, shapePolygon } from '../../geometry/geometry';
 import type { Feature, Project } from '../../geometry/types';
 import { roundNm } from '../../state/units';
 
 export interface Handle {
   name: string;
-  x: number; // absolute µm
+  x: number; // µm (for full-width shapes, x is set by the caller to a visible position)
   y: number;
   cursor: string;
 }
 
 const MIN = 0.001; // 1 nm: smallest size a drag can produce
 
-export function handlesFor(p: Project, f: Feature): Handle[] {
-  const ay = anchorY(p, f.anchor);
+/** Handles for a shape. `visibleX` positions handles of full-width shapes on screen. */
+export function handlesFor(f: Feature, visibleX = 0): Handle[] {
   switch (f.kind) {
     case 'rect': {
-      const y0 = ay + f.y;
-      const ym = y0 + f.height / 2;
+      if (f.fullWidth) {
+        return [
+          { name: 'b', x: visibleX, y: f.y, cursor: 'ns-resize' },
+          { name: 't', x: visibleX, y: f.y + f.height, cursor: 'ns-resize' },
+        ];
+      }
+      const ym = f.y + f.height / 2;
       return [
         { name: 'l', x: f.x - f.width / 2, y: ym, cursor: 'ew-resize' },
         { name: 'r', x: f.x + f.width / 2, y: ym, cursor: 'ew-resize' },
-        { name: 'b', x: f.x, y: y0, cursor: 'ns-resize' },
-        { name: 't', x: f.x, y: y0 + f.height, cursor: 'ns-resize' },
+        { name: 'b', x: f.x, y: f.y, cursor: 'ns-resize' },
+        { name: 't', x: f.x, y: f.y + f.height, cursor: 'ns-resize' },
       ];
     }
-    case 'trapezoid': {
-      const y0 = ay + f.y;
+    case 'trapezoid':
       return [
-        { name: 'bl', x: f.x - f.widthBottom / 2, y: y0, cursor: 'ew-resize' },
-        { name: 'br', x: f.x + f.widthBottom / 2, y: y0, cursor: 'ew-resize' },
-        { name: 'tl', x: f.x - f.widthTop / 2, y: y0 + f.height, cursor: 'ew-resize' },
-        { name: 'tr', x: f.x + f.widthTop / 2, y: y0 + f.height, cursor: 'ew-resize' },
-        { name: 't', x: f.x, y: y0 + f.height, cursor: 'ns-resize' },
+        { name: 'bl', x: f.x - f.widthBottom / 2, y: f.y, cursor: 'ew-resize' },
+        { name: 'br', x: f.x + f.widthBottom / 2, y: f.y, cursor: 'ew-resize' },
+        { name: 'tl', x: f.x - f.widthTop / 2, y: f.y + f.height, cursor: 'ew-resize' },
+        { name: 'tr', x: f.x + f.widthTop / 2, y: f.y + f.height, cursor: 'ew-resize' },
+        { name: 't', x: f.x, y: f.y + f.height, cursor: 'ns-resize' },
       ];
-    }
     case 'circle':
-      return [{ name: 'r', x: f.x + f.radius, y: ay + f.y, cursor: 'ew-resize' }];
+      return [{ name: 'r', x: f.x + f.radius, y: f.y, cursor: 'ew-resize' }];
     case 'polygon':
-      return shapePolygon(p, f)!.map(([x, y], i) => ({ name: `v${i}`, x, y, cursor: 'move' }));
+      return shapePolygon(f)!.map(([x, y], i) => ({ name: `v${i}`, x, y, cursor: 'move' }));
     case 'graded': {
       const e = gradedExtent(f);
-      const yc = ay + f.y;
       const hs: Handle[] = [
-        { name: 'wx', x: f.x + e.hx, y: yc, cursor: 'ew-resize' },
-        { name: 'wy', x: f.x, y: yc - f.wy, cursor: 'ns-resize' },
+        { name: 'wx', x: f.x + e.hx, y: f.y, cursor: 'ew-resize' },
+        { name: 'wy', x: f.x, y: f.y - f.wy, cursor: 'ns-resize' },
       ];
-      if (f.profileX === 'erf-strip') hs.push({ name: 'strip', x: f.x + f.stripWidth / 2, y: yc - f.wy / 2, cursor: 'ew-resize' });
+      if (f.profileX === 'erf-strip') hs.push({ name: 'strip', x: f.x + f.stripWidth / 2, y: f.y - f.wy / 2, cursor: 'ew-resize' });
       return hs;
     }
   }
@@ -65,14 +67,14 @@ export interface SnapContext {
   ys: number[];
 }
 
-/** Snap targets: x = 0, layer interfaces, and the edges/centres of other features. */
+/** Snap targets: x = 0, y = 0, and the edges/centres of the other shapes. */
 export function snapTargets(p: Project, excludeId: string | null): { xs: number[]; ys: number[] } {
   const xs = [0];
-  const ys = [0, ...layerBounds(p).map((b) => b.y1)];
+  const ys = [0];
   for (const f of p.features) {
     if (f.id === excludeId) continue;
-    const b = featureBox(p, f);
-    xs.push(b.x0, b.x1, (b.x0 + b.x1) / 2);
+    const b = featureBox(f);
+    if (!isFullWidth(f)) xs.push(b.x0, b.x1, (b.x0 + b.x1) / 2);
     ys.push(b.y0, b.y1);
   }
   return { xs, ys };
@@ -94,7 +96,7 @@ export function snap(v: number, targets: number[], ctx: SnapContext): number {
   return roundNm(Math.round(v / ctx.step) * ctx.step);
 }
 
-/** Offset needed to snap the first of several candidate coordinates that lands near a target. */
+/** Offset that snaps the first of several candidate coordinates landing near a target. */
 function snapOffset(cands: number[], targets: number[], ctx: SnapContext): number {
   if (!ctx.enabled) return 0;
   let best = 0;
@@ -114,25 +116,15 @@ function snapOffset(cands: number[], targets: number[], ctx: SnapContext): numbe
 }
 
 /**
- * New field values for `start` (the feature at drag start) after dragging `handle` to the
- * absolute point (px, py), or by (dx, dy) for a body move.
+ * New field values for `start` (the shape at drag start) after dragging `handle` to the
+ * point (px, py), or by (dx, dy) for a body move.
  */
-export function applyDrag(
-  p: Project,
-  start: Feature,
-  handle: string,
-  px: number,
-  py: number,
-  dx: number,
-  dy: number,
-  ctx: SnapContext,
-): Partial<Feature> {
-  const ay = anchorY(p, start.anchor);
-
+export function applyDrag(start: Feature, handle: string, px: number, py: number, dx: number, dy: number, ctx: SnapContext): Partial<Feature> {
   if (handle === 'move') {
-    const b = featureBox(p, start);
-    const ox = snapOffset([b.x0 + dx, b.x1 + dx, (b.x0 + b.x1) / 2 + dx], ctx.xs, ctx);
+    const b = featureBox(start);
     const oy = snapOffset([b.y0 + dy, b.y1 + dy], ctx.ys, ctx);
+    if (isFullWidth(start)) return { y: roundNm(start.y + dy + oy) }; // layers only move vertically
+    const ox = snapOffset([b.x0 + dx, b.x1 + dx, (b.x0 + b.x1) / 2 + dx], ctx.xs, ctx);
     return { x: roundNm(start.x + dx + ox), y: roundNm(start.y + dy + oy) };
   }
 
@@ -143,7 +135,7 @@ export function applyDrag(
     case 'rect': {
       const left = start.x - start.width / 2;
       const right = start.x + start.width / 2;
-      const bottom = ay + start.y;
+      const bottom = start.y;
       const top = bottom + start.height;
       if (handle === 'l') {
         const l = Math.min(sx(), right - MIN);
@@ -156,7 +148,7 @@ export function applyDrag(
       if (handle === 't') return { height: roundNm(Math.max(sy(), bottom + MIN) - bottom) };
       if (handle === 'b') {
         const b = Math.min(sy(), top - MIN);
-        return { y: roundNm(b - ay), height: roundNm(top - b) };
+        return { y: roundNm(b), height: roundNm(top - b) };
       }
       return {};
     }
@@ -164,33 +156,25 @@ export function applyDrag(
       const half = Math.max(Math.abs(sx() - start.x), MIN / 2);
       if (handle === 'bl' || handle === 'br') return { widthBottom: roundNm(2 * half) };
       if (handle === 'tl' || handle === 'tr') return { widthTop: roundNm(2 * half) };
-      if (handle === 't') return { height: roundNm(Math.max(sy() - (ay + start.y), MIN)) };
+      if (handle === 't') return { height: roundNm(Math.max(sy() - start.y, MIN)) };
       return {};
     }
     case 'circle':
-      return { radius: roundNm(Math.max(Math.hypot(px - start.x, py - (ay + start.y)), MIN)) };
+      return { radius: roundNm(Math.max(Math.hypot(px - start.x, py - start.y), MIN)) };
     case 'polygon': {
       const i = Number(handle.slice(1));
       const pts = start.points.map((q) => [...q] as [number, number]);
-      pts[i] = [roundNm(sx() - start.x), roundNm(sy() - ay - start.y)];
+      pts[i] = [roundNm(sx() - start.x), roundNm(sy() - start.y)];
       return { points: pts };
     }
     case 'graded': {
-      const yc = ay + start.y;
       if (handle === 'wx') {
         const strip = start.profileX === 'erf-strip' ? start.stripWidth / 2 : 0;
         return { wx: roundNm(Math.max(sx() - start.x - strip, MIN)) };
       }
-      if (handle === 'wy') return { wy: roundNm(Math.max(yc - sy(), MIN)) };
+      if (handle === 'wy') return { wy: roundNm(Math.max(start.y - sy(), MIN)) };
       if (handle === 'strip') return { stripWidth: roundNm(Math.max(2 * (sx() - start.x), 0)) };
       return {};
     }
   }
-}
-
-/** New thickness when dragging the top surface of layer `id` to absolute y. */
-export function dragLayerTop(p: Project, id: string, py: number, ctx: SnapContext): number | null {
-  const b = layerBounds(p).find((l) => l.layer.id === id);
-  if (!b) return null;
-  return roundNm(Math.max(snap(py, ctx.ys, ctx) - b.y0, MIN));
 }

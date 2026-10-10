@@ -11,41 +11,28 @@ const auto = <T extends z.ZodTypeAny>(t: T) => z.union([t, z.literal('auto')]);
 
 const materialUse = { material: z.string().min(1), opticAxis: axis.optional() };
 
-const layer = z.object({ id: z.string(), name: z.string(), thickness: positive, ...materialUse });
-
 const shapeBase = {
   id: z.string(),
   name: z.string(),
-  anchor: z.string(),
   deltaN: finite.optional(),
   deltaNIsExample: z.boolean().optional(),
   ...materialUse,
 };
 
 const feature = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('rect'), x: finite, y: finite, width: positive, height: positive, ...shapeBase }),
   z.object({
-    kind: z.literal('trapezoid'),
-    x: finite,
-    y: finite,
-    widthBottom: nonneg,
-    widthTop: nonneg,
-    height: positive,
-    ...shapeBase,
+    kind: z.literal('rect'), x: finite, y: finite, width: positive, height: positive,
+    fullWidth: z.boolean().optional(), ...shapeBase,
+  }),
+  z.object({
+    kind: z.literal('trapezoid'), x: finite, y: finite, widthBottom: nonneg, widthTop: nonneg, height: positive, ...shapeBase,
   }),
   z.object({ kind: z.literal('circle'), x: finite, y: finite, radius: positive, ...shapeBase }),
-  z.object({
-    kind: z.literal('polygon'),
-    x: finite,
-    y: finite,
-    points: z.array(z.tuple([finite, finite])).min(3),
-    ...shapeBase,
-  }),
+  z.object({ kind: z.literal('polygon'), x: finite, y: finite, points: z.array(z.tuple([finite, finite])).min(3), ...shapeBase }),
   z.object({
     kind: z.literal('graded'),
     id: z.string(),
     name: z.string(),
-    anchor: z.string(),
     x: finite,
     y: finite,
     deltaN: finite,
@@ -59,18 +46,12 @@ const feature = z.discriminatedUnion('kind', [
 ]);
 
 export const projectSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   name: z.string(),
   wavelength: positive,
-  stack: z.object({
-    substrate: z.object(materialUse),
-    layers: z.array(layer),
-    cladding: z.object(materialUse),
-  }),
+  background: z.object(materialUse),
   features: z.array(feature),
-  customMaterials: z.array(
-    z.object({ id: z.string().startsWith('custom:'), name: z.string(), n: positive, k: nonneg }),
-  ),
+  customMaterials: z.array(z.object({ id: z.string().startsWith('custom:'), name: z.string(), n: positive, k: nonneg })),
   settings: z.object({
     solverKind: auto(z.enum(['scalar', 'semivector-te', 'semivector-tm', 'fullvector'])),
     meshStep: auto(positive),
@@ -85,8 +66,44 @@ export const projectSchema = z.object({
 type Parsed = z.infer<typeof projectSchema>;
 export const _typecheck: [Parsed extends Project ? true : never, Project extends Parsed ? true : never] = [true, true];
 
-/** Bring an older decoded object up to the current version. No older versions exist yet. */
+/** Depth given to a migrated semi-infinite substrate: far beyond any solve window. */
+export const MIGRATED_SUBSTRATE_DEPTH = 100;
+
+type Obj = Record<string, unknown>;
+
+/**
+ * v1 → v2: the layer stack becomes shapes. Cladding → background; substrate → a full-width
+ * rectangle below y = 0; layers → full-width rectangles; anchored shapes → absolute y.
+ */
+function migrateV1(raw: Obj): Obj {
+  const stack = raw.stack as { substrate: Obj; layers: (Obj & { id: string; thickness: number; name: string })[]; cladding: Obj };
+  const tops = new Map<string, number>();
+  let y = 0;
+  const layerShapes: Obj[] = [];
+  for (const l of stack.layers) {
+    layerShapes.push({
+      kind: 'rect', id: l.id, name: l.name, material: l.material, opticAxis: l.opticAxis,
+      x: 0, y, width: 10, height: l.thickness, fullWidth: true,
+    });
+    y += l.thickness;
+    tops.set(l.id, y);
+  }
+  const substrate = {
+    kind: 'rect', id: 'substrate', name: 'Substrate', ...stack.substrate,
+    x: 0, y: -MIGRATED_SUBSTRATE_DEPTH, width: 10, height: MIGRATED_SUBSTRATE_DEPTH, fullWidth: true,
+  };
+  const features = (raw.features as (Obj & { anchor: string; y: number })[]).map(({ anchor, ...f }) => ({
+    ...f,
+    y: f.y + (tops.get(anchor) ?? 0),
+  }));
+  const { stack: _s, ...rest } = raw;
+  void _s;
+  return { ...rest, version: 2, background: stack.cladding, features: [substrate, ...layerShapes, ...features] };
+}
+
+/** Bring an older decoded object up to the current version. */
 export function migrate(raw: unknown): unknown {
+  if (raw && typeof raw === 'object' && (raw as Obj).version === 1 && (raw as Obj).stack) return migrateV1(raw as Obj);
   return raw;
 }
 

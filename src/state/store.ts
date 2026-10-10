@@ -2,18 +2,12 @@
 // Results are derived (see useLiveSolve) and never stored here.
 
 import { create } from 'zustand';
-import { structureBox, uid } from '../geometry/geometry';
-import { applyList, listItems, moveItem, stepItem } from '../geometry/stackList';
+import { isFullWidth, structureBox, uid } from '../geometry/geometry';
 import { DEFAULT_TEMPLATE_ID, buildTemplate } from '../geometry/templates';
-import type { Feature, FeatureKind, Layer, Project } from '../geometry/types';
+import type { Feature, FeatureKind, Project, ShapeFeature } from '../geometry/types';
 import type { LengthUnit } from './units';
 
-export type Selection =
-  | { type: 'feature'; id: string }
-  | { type: 'layer'; id: string }
-  | { type: 'substrate' }
-  | { type: 'cladding' }
-  | null;
+export type Selection = { type: 'feature'; id: string } | { type: 'background' } | null;
 
 export type FieldView = 'E2' | 'Ex' | 'Ey' | 'Ez' | 'Hx' | 'Hy' | 'Hz';
 
@@ -24,6 +18,8 @@ export interface UiState {
   showContour: boolean;
   selectedMode: number;
   advancedOpen: boolean;
+  /** Pop-up editor for the selected shape (or background) is open. */
+  editorOpen: boolean;
 }
 
 export interface Notice {
@@ -71,7 +67,7 @@ export const useStore = create<State>((set, get) => ({
   future: [],
   lastEdit: null,
   selection: null,
-  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: true, selectedMode: 0, advancedOpen: false },
+  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: true, selectedMode: 0, advancedOpen: false, editorOpen: false },
   notice: null,
   viewEpoch: 0,
 
@@ -79,7 +75,6 @@ export const useStore = create<State>((set, get) => ({
     const { project, past, lastEdit } = get();
     const draft = structuredClone(project);
     recipe(draft);
-    normalise(draft);
     const now = Date.now();
     const merge = coalesce !== undefined && lastEdit?.key === coalesce && now - lastEdit.at < COALESCE_MS;
     set({
@@ -91,7 +86,6 @@ export const useStore = create<State>((set, get) => ({
   },
 
   replaceProject: (p, opts) => {
-    normalise(p);
     const { project, past } = get();
     set({
       project: p,
@@ -133,16 +127,10 @@ export const useStore = create<State>((set, get) => ({
   dismissNotice: () => set({ notice: null }),
 }));
 
-/** Keep feature paint order consistent with the structure list (higher in list = on top). */
-function normalise(p: Project) {
-  applyList(p, listItems(p));
-}
-
 /** Drop a selection whose object no longer exists (after undo/redo/delete). */
 function fixSelection(get: () => State, set: (s: Partial<State>) => void) {
   const { selection, project } = get();
   if (selection?.type === 'feature' && !project.features.some((f) => f.id === selection.id)) set({ selection: null });
-  if (selection?.type === 'layer' && !project.stack.layers.some((l) => l.id === selection.id)) set({ selection: null });
 }
 
 // ---- Edit helpers -------------------------------------------------------------------------
@@ -154,103 +142,95 @@ export function patchFeature(id: string, patch: Partial<Feature>, coalesce?: str
   }, coalesce);
 }
 
-export function patchLayer(id: string, patch: Partial<Layer>, coalesce?: string) {
-  useStore.getState().update((p) => {
-    const l = p.stack.layers.find((x) => x.id === id);
-    if (l) Object.assign(l, patch);
-  }, coalesce);
-}
-
-function topAnchor(p: Project): string {
-  const ls = p.stack.layers;
-  return ls.length ? ls[ls.length - 1].id : 'substrate';
-}
-
+/** Place new shapes on y = 0 (the usual top surface), beside the existing finite shapes. */
 export function newFeature(p: Project, kind: FeatureKind): Feature {
-  const anchor = topAnchor(p);
-  const f = baseFeature(p, kind, anchor);
-  // Place it beside the existing structure rather than on top of it.
-  if (p.features.length > 0) {
-    const b = structureBox(p);
-    const half = kind === 'circle' ? 0.5 : kind === 'graded' ? 1 : 0.4;
-    f.x = Math.round((b.x1 + 0.3 + half) * 1000) / 1000;
-  }
-  return f;
-}
-
-function baseFeature(p: Project, kind: FeatureKind, anchor: string): Feature {
-  const material = p.features.find((f) => f.kind !== 'graded')?.material ?? 'Si3N4';
+  const material = p.features.find((f): f is ShapeFeature => f.kind !== 'graded' && !isFullWidth(f))?.material ?? 'Si3N4';
   const id = uid('f');
-  const count = p.features.length + 1;
+  const n = p.features.length + 1;
+  const hasFinite = p.features.some((f) => !isFullWidth(f));
+  const b = structureBox(p);
+  const half = kind === 'circle' ? 0.5 : kind === 'graded' ? 1 : 0.4;
+  const x = hasFinite ? Math.round((b.x1 + 0.3 + half) * 1000) / 1000 : 0;
   switch (kind) {
     case 'rect':
-      return { id, kind, name: `Rectangle ${count}`, material, anchor, x: 0, y: 0, width: 0.6, height: 0.4 };
+      return { id, kind, name: `Rectangle ${n}`, material, x, y: 0, width: 0.6, height: 0.4 };
     case 'trapezoid':
-      return { id, kind, name: `Trapezoid ${count}`, material, anchor, x: 0, y: 0, widthBottom: 0.8, widthTop: 0.5, height: 0.4 };
+      return { id, kind, name: `Trapezoid ${n}`, material, x, y: 0, widthBottom: 0.8, widthTop: 0.5, height: 0.4 };
     case 'circle':
-      return { id, kind, name: `Circle ${count}`, material, anchor, x: 0, y: 0.5, radius: 0.5 };
+      return { id, kind, name: `Circle ${n}`, material, x, y: 0.5, radius: 0.5 };
     case 'polygon':
-      return { id, kind, name: `Polygon ${count}`, material, anchor, x: 0, y: 0, points: [[-0.4, 0], [0.4, 0], [0.2, 0.4], [-0.2, 0.4]] };
+      return { id, kind, name: `Polygon ${n}`, material, x, y: 0, points: [[-0.4, 0], [0.4, 0], [0.2, 0.4], [-0.2, 0.4]] };
     case 'graded':
       return {
-        id, kind, name: `Graded index ${count}`, anchor, x: 0, y: 0, deltaN: 0.01,
+        id, kind, name: `Graded index ${n}`, x, y: 0, deltaN: 0.01,
         profileX: 'gaussian', stripWidth: 0, wx: 1, wy: 1, profileY: 'gaussian',
       };
   }
+}
+
+function selectAndEdit(id: string) {
+  const s = useStore.getState();
+  s.select({ type: 'feature', id });
+  s.setUi({ editorOpen: true });
 }
 
 export function addFeature(kind: FeatureKind) {
   const s = useStore.getState();
   const f = newFeature(s.project, kind);
   s.update((p) => void p.features.push(f));
-  s.select({ type: 'feature', id: f.id });
+  selectAndEdit(f.id);
+}
+
+/**
+ * Add a full-width layer on top of the existing layers (e.g. a film or upper cladding),
+ * listed above them but below any finite shapes so it doesn't cover the core.
+ */
+export function addLayer() {
+  const s = useStore.getState();
+  const id = uid('f');
+  s.update((p) => {
+    const slabs = p.features.filter(isFullWidth);
+    const top = slabs.length ? Math.max(...slabs.map((f) => f.y + f.height)) : 0;
+    const lastSlab = slabs.length ? p.features.indexOf(slabs[slabs.length - 1]) : -1;
+    p.features.splice(lastSlab + 1, 0, {
+      id, kind: 'rect', name: `Layer ${slabs.length + 1}`, material: 'SiO2', x: 0, y: top, width: 10, height: 0.5, fullWidth: true,
+    });
+  });
+  selectAndEdit(id);
 }
 
 export function deleteFeature(id: string) {
   const s = useStore.getState();
   s.update((p) => void (p.features = p.features.filter((f) => f.id !== id)));
-  if (s.selection?.type === 'feature' && s.selection.id === id) s.select(null);
+  if (s.selection?.type === 'feature' && s.selection.id === id) {
+    s.select(null);
+    s.setUi({ editorOpen: false });
+  }
 }
 
 export function duplicateFeature(id: string) {
   const s = useStore.getState();
   const f = s.project.features.find((x) => x.id === id);
   if (!f) return;
-  const copy = { ...structuredClone(f), id: uid('f'), name: `${f.name} copy`, x: f.x + 0.2 } as Feature;
-  s.update((p) => void p.features.splice(p.features.indexOf(p.features.find((x) => x.id === id)!) + 1, 0, copy));
-  s.select({ type: 'feature', id: copy.id });
+  const copy = { ...structuredClone(f), id: uid('f'), name: `${f.name} copy` } as Feature;
+  if (isFullWidth(f)) copy.y = f.y + f.height; // stack a copied layer on top of the original
+  else copy.x = f.x + 0.2;
+  s.update((p) => void p.features.splice(p.features.findIndex((x) => x.id === id) + 1, 0, copy));
+  selectAndEdit(copy.id);
 }
 
-/** Insert a layer above `belowId` (or at the top). */
-export function addLayer(aboveOf?: string) {
-  const s = useStore.getState();
-  const id = uid('l');
-  s.update((p) => {
-    const i = aboveOf ? p.stack.layers.findIndex((l) => l.id === aboveOf) + 1 : p.stack.layers.length;
-    p.stack.layers.splice(i, 0, { id, name: `Layer ${p.stack.layers.length + 1}`, material: 'SiO2', thickness: 0.5 });
-  });
-  s.select({ type: 'layer', id });
-}
-
-/** Delete a layer. Features sitting on it move to the surface below, keeping their offsets. */
-export function deleteLayer(id: string) {
-  const s = useStore.getState();
-  s.update((p) => {
-    const i = p.stack.layers.findIndex((l) => l.id === id);
+/** Move a shape to `index` in the bottom → top order (list order shown top → bottom). */
+export function moveFeature(id: string, index: number) {
+  useStore.getState().update((p) => {
+    const i = p.features.findIndex((f) => f.id === id);
     if (i < 0) return;
-    const below = i > 0 ? p.stack.layers[i - 1].id : 'substrate';
-    for (const f of p.features) if (f.anchor === id) f.anchor = below;
-    p.stack.layers.splice(i, 1);
+    const [f] = p.features.splice(i, 1);
+    p.features.splice(Math.min(Math.max(index, 0), p.features.length), 0, f);
   });
-  if (s.selection?.type === 'layer' && s.selection.id === id) s.select(null);
 }
 
-/** Drag-and-drop in the structure list: move item `key` to list position `to`. */
-export function moveInList(key: string, to: number) {
-  useStore.getState().update((p) => applyList(p, moveItem(listItems(p), key, to)));
-}
-
-/** Move a list item one step up (−1) or down (+1). */
-export function stepInList(key: string, dir: -1 | 1) {
-  useStore.getState().update((p) => applyList(p, stepItem(listItems(p), key, dir)));
+/** One step towards the top of the list (+1: drawn over more shapes) or the bottom (−1). */
+export function stepFeature(id: string, dir: 1 | -1) {
+  const i = useStore.getState().project.features.findIndex((f) => f.id === id);
+  if (i >= 0) moveFeature(id, i + dir);
 }

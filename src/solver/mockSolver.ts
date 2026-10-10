@@ -3,8 +3,9 @@
 // estimate so n_eff, mode count and mode size respond sensibly to edits. Fields are
 // Hermite–Gaussians. Every result carries isMock: true and the UI must say so.
 
-import { effectiveMeshStep, featureBox, indexAtPoint, solveDomain, structureBox, type Box } from '../geometry/geometry';
-import type { Project } from '../geometry/types';
+import { effectiveMeshStep, featureBox, indexAtPoint, isFullWidth, solveDomain, structureBox, type Box } from '../geometry/geometry';
+import { maxIndexAt } from '../materials/library';
+import type { Feature, Project } from '../geometry/types';
 import type { Axis } from '../materials/types';
 import { LatestWins } from './latestWins';
 import {
@@ -36,18 +37,27 @@ function hermite(n: number, x: number): number {
   }
 }
 
-/** The mock's notion of "the core": the first shape plus any shapes within 250 nm of it (slot rails). */
+/**
+ * The mock's notion of "the core": the highest-index finite shape, plus any finite shapes within
+ * 250 nm of it (e.g. slot rails). Full-width layers are never the core.
+ */
 export function coreBox(p: Project): Box {
-  if (p.features.length === 0) return structureBox(p);
-  let b = featureBox(p, p.features[0]);
+  const finite = p.features.filter((f) => !isFullWidth(f));
+  if (finite.length === 0) return structureBox(p);
+  const nOf = (f: Feature) =>
+    f.kind === 'graded'
+      ? indexAtPoint(p, f.x, f.y - 1e-6)
+      : maxIndexAt(f.material, p.wavelength, p.customMaterials) + (f.deltaN ?? 0);
+  const seed = finite.reduce((a, b) => (nOf(b) > nOf(a) ? b : a));
+  let b = featureBox(seed);
   const gap = 0.25;
+  const used = new Set([seed.id]);
   let grew = true;
-  const used = new Set([p.features[0].id]);
   while (grew) {
     grew = false;
-    for (const f of p.features) {
+    for (const f of finite) {
       if (used.has(f.id)) continue;
-      const fb = featureBox(p, f);
+      const fb = featureBox(f);
       if (fb.x0 <= b.x1 + gap && fb.x1 >= b.x0 - gap && fb.y0 <= b.y1 + gap && fb.y1 >= b.y0 - gap) {
         b = { x0: Math.min(b.x0, fb.x0), x1: Math.max(b.x1, fb.x1), y0: Math.min(b.y0, fb.y0), y1: Math.max(b.y1, fb.y1) };
         used.add(f.id);

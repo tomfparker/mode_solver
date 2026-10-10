@@ -2,25 +2,28 @@
 // writes the same store fields the numeric inputs edit.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import {
-  anchorY, featureBox, gradedExtent, indexAtPoint, layerBounds, shapePolygon, solveDomain, stackTop, uid,
-} from '../../geometry/geometry';
+import { featureBox, gradedExtent, indexAtPoint, isFullWidth, shapePolygon, solveDomain, uid } from '../../geometry/geometry';
 import type { Feature, MaterialUse, Project } from '../../geometry/types';
 import { maxIndexAt, materialInfo } from '../../materials/library';
 import { fmtIndex } from '../../state/format';
-import { patchFeature, patchLayer, useStore, type FieldView } from '../../state/store';
+import { patchFeature, useStore, type FieldView } from '../../state/store';
 import { formatLength } from '../../state/units';
 import type { SolveResult } from '../../solver/types';
 import { geoFill } from '../geoFill';
 import { usePrefersDark } from '../usePrefersDark';
 import { e2Contour, fieldData, fieldDataUrl } from './fieldImage';
-import { applyDrag, dragLayerTop, handlesFor, snapTargets, type SnapContext } from './handles';
+import { ShapeEditor } from '../ShapeEditor';
+import { applyDrag, handlesFor, snapTargets, type SnapContext } from './handles';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt, type Size, type View } from './view';
 
 type Drag =
-  | { type: 'feature'; id: string; handle: string; start: Feature; x0: number; y0: number; key: string; targets: { xs: number[]; ys: number[] } }
-  | { type: 'layer-edge'; id: string; key: string; targets: { xs: number[]; ys: number[] } }
-  | { type: 'pan'; px: number; py: number; view: View; moved: boolean; onClick?: () => void };
+  | {
+      type: 'feature'; id: string; handle: string; start: Feature; x0: number; y0: number; px: number; py: number;
+      moved: boolean; key: string; targets: { xs: number[]; ys: number[] };
+    }
+  | { type: 'pan'; px: number; py: number; view: View; moved: boolean };
+
+const CLICK_SLOP = 3; // px of movement before a press becomes a drag
 
 const FIELD_VIEWS: { id: FieldView; label: string }[] = [
   { id: 'E2', label: '|E|²' },
@@ -47,6 +50,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
   const viewEpoch = useStore((s) => s.viewEpoch);
   const select = useStore((s) => s.select);
   const setUi = useStore((s) => s.setUi);
+  const [dragging, setDragging] = useState(false);
 
   const wrap = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -150,32 +154,21 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
     const [x, y] = toUm(view, size, px, py);
     const el = (e.target as Element).closest('[data-kind]') as SVGElement | null;
     const kind = el?.dataset.kind;
-    const id = el?.dataset.id ?? '';
     svgRef.current!.setPointerCapture(e.pointerId);
 
-    if (e.button === 1 || e.button === 2 || !kind) {
-      drag.current = { type: 'pan', px, py, view, moved: false };
-      return;
-    }
-    if (kind === 'feature' || kind === 'handle') {
-      const fid = kind === 'handle' ? el!.dataset.feature! : id;
+    if (e.button === 0 && (kind === 'feature' || kind === 'handle')) {
+      const fid = kind === 'handle' ? el!.dataset.feature! : el!.dataset.id!;
       const f = project.features.find((q) => q.id === fid)!;
       select({ type: 'feature', id: fid });
       drag.current = {
-        type: 'feature', id: fid, handle: kind === 'handle' ? id : 'move', start: structuredClone(f),
-        x0: x, y0: y, key: uid('drag'), targets: snapTargets(project, fid),
+        type: 'feature', id: fid, handle: kind === 'handle' ? el!.dataset.id! : 'move', start: structuredClone(f),
+        x0: x, y0: y, px, py, moved: kind === 'handle', key: uid('drag'), targets: snapTargets(project, fid),
       };
+      if (kind === 'handle') setDragging(true);
       return;
     }
-    if (kind === 'layer-edge') {
-      select({ type: 'layer', id });
-      drag.current = { type: 'layer-edge', id, key: uid('drag'), targets: snapTargets(project, null) };
-      return;
-    }
-    // Clicking a layer/substrate/cladding selects it; dragging pans.
-    const target =
-      kind === 'layer' ? ({ type: 'layer', id } as const) : kind === 'substrate' ? ({ type: 'substrate' } as const) : ({ type: 'cladding' } as const);
-    drag.current = { type: 'pan', px, py, view, moved: false, onClick: () => select(target) };
+    // Background: drag pans; a click clears the selection.
+    drag.current = { type: 'pan', px, py, view, moved: false };
   };
 
   const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
@@ -184,54 +177,50 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
     setReadout({ x, y, n: indexAtPoint(project, x, y, 'x') });
     const d = drag.current;
     if (!d) return;
+    const far = Math.abs(px - d.px) + Math.abs(py - d.py) > CLICK_SLOP;
     if (d.type === 'pan') {
-      const dx = px - d.px;
-      const dy = py - d.py;
-      if (Math.abs(dx) + Math.abs(dy) > 3) {
+      if (far) {
         d.moved = true;
         userAdjusted.current = true;
       }
-      if (d.moved) setView({ ...d.view, cx: d.view.cx - dx / d.view.scale, cy: d.view.cy + dy / d.view.scale });
-    } else if (d.type === 'feature') {
-      const patch = applyDrag(project, d.start, d.handle, x, y, x - d.x0, y - d.y0, snapCtx(e, d.targets));
-      patchFeature(d.id, patch, d.key);
-    } else if (d.type === 'layer-edge') {
-      const t = dragLayerTop(project, d.id, y, snapCtx(e, d.targets));
-      if (t !== null) patchLayer(d.id, { thickness: t }, d.key);
+      if (d.moved) setView({ ...d.view, cx: d.view.cx - (px - d.px) / d.view.scale, cy: d.view.cy + (py - d.py) / d.view.scale });
+      return;
     }
+    if (!d.moved && !far) return; // still a click
+    if (!d.moved) setDragging(true);
+    d.moved = true;
+    patchFeature(d.id, applyDrag(d.start, d.handle, x, y, x - d.x0, y - d.y0, snapCtx(e, d.targets)), d.key);
   };
 
   const onPointerUp = () => {
     const d = drag.current;
-    if (d?.type === 'pan' && !d.moved) {
-      if (d.onClick) d.onClick();
-      else select(null);
-    }
     drag.current = null;
+    setDragging(false);
+    if (d?.type === 'pan' && !d.moved) {
+      select(null);
+      setUi({ editorOpen: false });
+    } else if (d?.type === 'feature' && !d.moved) {
+      setUi({ editorOpen: true }); // click on a shape opens its editor
+    }
     if (d && d.type !== 'pan' && !userAdjusted.current && !contained(view)) fit();
   };
 
   // ---- Geometry ------------------------------------------------------------------------
-  const top = stackTop(project);
-  const bounds = layerBounds(project);
   const W = Math.max(0, size.w);
-  const band = (yA: number, yB: number) => {
-    const [, pyA] = P(0, yA);
-    const [, pyB] = P(0, yB);
-    return { y: Math.min(pyA, pyB), h: Math.abs(pyB - pyA) };
-  };
-  const sub = band(Math.min(vy0, 0), 0);
-  const clad = band(top, Math.max(vy1, top));
 
   const featureShape = (f: Feature, props: Record<string, unknown>) => {
+    if (isFullWidth(f)) {
+      const [, ya] = P(0, f.y + f.height);
+      const [, yb] = P(0, f.y);
+      return <rect x={-2} y={ya} width={W + 4} height={Math.max(yb - ya, 0.5)} {...props} />;
+    }
     if (f.kind === 'circle') {
-      const [cx, cy] = P(f.x, anchorY(project, f.anchor) + f.y);
+      const [cx, cy] = P(f.x, f.y);
       return <circle cx={cx} cy={cy} r={f.radius * view.scale} {...props} />;
     }
     if (f.kind === 'graded') {
       const e = gradedExtent(f);
-      const yc = anchorY(project, f.anchor) + f.y;
-      const [cx, cy] = P(f.x, yc);
+      const [cx, cy] = P(f.x, f.y);
       const rx = e.hx * view.scale;
       const ryDown = e.hyDown * view.scale;
       const d =
@@ -240,7 +229,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
           : `M${cx - rx},${cy} A${rx},${ryDown} 0 1 0 ${cx + rx},${cy} A${rx},${ryDown} 0 1 0 ${cx - rx},${cy} Z`;
       return <path d={d} strokeDasharray="5 4" {...props} />;
     }
-    return <path d={path(shapePolygon(project, f)!)} {...props} />;
+    return <path d={path(shapePolygon(f)!)} {...props} />;
   };
 
   const selFeature = selection?.type === 'feature' ? project.features.find((f) => f.id === selection.id) : undefined;
@@ -258,6 +247,26 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
   }
   const [dx0, dy1] = P(domain.x0, domain.y1);
   const [dx1, dy0] = P(domain.x1, domain.y0);
+
+  // Where the pop-up editor goes: beside the selected shape, kept inside the canvas.
+  const EDITOR_W = 300;
+  let editorPos: { left: number; top: number } | null = null;
+  if (ui.editorOpen && selection && !dragging) {
+    if (selFeature && !isFullWidth(selFeature)) {
+      const b = featureBox(selFeature);
+      const [, by1] = P(0, b.y1);
+      const [bx1] = P(b.x1, 0);
+      const [bx0] = P(b.x0, 0);
+      const right = bx1 + 16;
+      const left = right + EDITOR_W < W - 8 ? right : bx0 - 16 - EDITOR_W;
+      editorPos = { left: Math.min(Math.max(left, 8), W - EDITOR_W - 8), top: Math.min(Math.max(by1 - 10, 44), size.h - 200) };
+    } else if (selFeature) {
+      const [, ytop] = P(0, selFeature.y + selFeature.height);
+      editorPos = { left: W - EDITOR_W - 60, top: Math.min(Math.max(ytop + 8, 44), size.h - 200) };
+    } else {
+      editorPos = { left: W - EDITOR_W - 60, top: 44 };
+    }
+  }
 
   return (
     <div className="canvas-zone" ref={wrap}>
@@ -308,18 +317,10 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
         role="img"
         aria-label="Waveguide cross-section with mode field"
       >
-        {/* Infinite slabs */}
-        <rect data-kind="cladding" x={0} y={clad.y} width={W} height={clad.h} fill={fillFor(project, project.stack.cladding)} />
-        {bounds.map(({ layer, y0, y1 }) => {
-          const b = band(y0, y1);
-          return <rect key={layer.id} data-kind="layer" data-id={layer.id} x={0} y={b.y} width={W} height={b.h} fill={fillFor(project, layer)} />;
-        })}
-        <rect data-kind="substrate" x={0} y={sub.y} width={W} height={sub.h} fill={fillFor(project, project.stack.substrate)} />
-        {[0, ...bounds.map((b) => b.y1)].map((yy, i) => (
-          <line key={i} x1={0} x2={W} y1={P(0, yy)[1]} y2={P(0, yy)[1]} stroke="var(--geo-stroke)" strokeOpacity={0.5} strokeWidth={1} pointerEvents="none" />
-        ))}
+        {/* Background fills the plane */}
+        <rect x={0} y={0} width={W} height={size.h} fill={fillFor(project, project.background)} />
 
-        {/* Shape fills */}
+        {/* Shape fills, bottom → top */}
         {project.features.map((f) =>
           f.kind === 'graded' ? null : <g key={f.id}>{featureShape(f, { fill: fillFor(project, f, f.deltaN ?? 0), stroke: 'none' })}</g>,
         )}
@@ -346,26 +347,22 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
           <title>The solver computes modes only inside this window; its edges act as walls. Size it under Advanced → Padding.</title>
         </text>
 
-        {/* Outlines on top of the field, also the hit areas for shapes */}
-        {project.features.map((f) => (
-          <g key={f.id} style={{ cursor: 'move' }}>
-            {featureShape(f, {
-              'data-kind': 'feature',
-              'data-id': f.id,
-              fill: 'transparent',
-              stroke: selFeature?.id === f.id ? 'var(--sel)' : 'var(--geo-stroke)',
-              strokeWidth: selFeature?.id === f.id ? 2 : 1.25,
-            })}
-          </g>
-        ))}
-
-        {/* Layer top edges: drag to change thickness */}
-        {bounds.map(({ layer, y1 }) => {
-          const yy = P(0, y1)[1];
+        {/* Outlines on top of the field; also the hit areas (topmost shape gets the click) */}
+        {project.features.map((f) => {
+          const sel = selFeature?.id === f.id;
           return (
-            <line key={layer.id} data-kind="layer-edge" data-id={layer.id} x1={0} x2={W} y1={yy} y2={yy} stroke="transparent" strokeWidth={9} style={{ cursor: 'ns-resize' }}>
-              <title>Drag to change {layer.name} thickness</title>
-            </line>
+            <g key={f.id} style={{ cursor: isFullWidth(f) ? 'ns-resize' : 'move' }}>
+              {featureShape(f, {
+                'data-kind': 'feature',
+                'data-id': f.id,
+                fill: 'transparent',
+                stroke: sel ? 'var(--sel)' : isFullWidth(f) ? 'none' : 'var(--geo-stroke)',
+                strokeWidth: sel ? 2 : 1.25,
+              })}
+              {isFullWidth(f) && !sel && (
+                <line x1={0} x2={W} y1={P(0, f.y + f.height)[1]} y2={P(0, f.y + f.height)[1]} stroke="var(--geo-stroke)" strokeOpacity={0.5} pointerEvents="none" />
+              )}
+            </g>
           );
         })}
 
@@ -382,28 +379,20 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
           />
         )}
 
-        {/* Labels */}
-        {clad.h > 18 && (
-          <text className="canvas-label" x={W - 12} y={clad.y + clad.h - 6} textAnchor="end">
-            Cladding · {matName(project, project.stack.cladding.material)}
-          </text>
-        )}
-        {bounds.map(({ layer, y0, y1 }) => {
-          const b = band(y0, y1);
-          if (b.h < 14) return null;
-          return (
-            <text key={layer.id} className="canvas-label" x={W - 12} y={Math.max(b.y, 0) + 15} textAnchor="end">
-              {layer.name} · {matName(project, layer.material)} · {formatLength(layer.thickness, ui.lengthUnit)}
-            </text>
-          );
-        })}
-        {sub.h > 18 && (
-          <text className="canvas-label" x={W - 12} y={sub.y + 15} textAnchor="end">
-            Substrate · {matName(project, project.stack.substrate.material)}
-          </text>
-        )}
+        {/* Labels: full-width shapes at the right edge just under their top; others above */}
         {project.features.map((f) => {
-          const b = featureBox(project, f);
+          if (isFullWidth(f)) {
+            const [, yt] = P(0, f.y + f.height);
+            const [, yb] = P(0, f.y);
+            if (yb - yt < 14 || yt > size.h || yb < 0) return null;
+            return (
+              <text key={f.id} className="canvas-label" x={W - 12} y={Math.max(yt, 0) + 15} textAnchor="end">
+                {f.name} · {matName(project, f.material)}
+                {f.height < 10 ? ` · ${formatLength(f.height, ui.lengthUnit)}` : ''}
+              </text>
+            );
+          }
+          const b = featureBox(f);
           const [cx, cyTop] = P((b.x0 + b.x1) / 2, b.y1);
           const wide = (b.x1 - b.x0) * view.scale > 40;
           if (!wide && selFeature?.id !== f.id) return null;
@@ -416,7 +405,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
 
         {/* Handles */}
         {selFeature &&
-          handlesFor(project, selFeature).map((h) => {
+          handlesFor(selFeature, (vx0 + vx1) / 2).map((h) => {
             const [hx, hy] = P(h.x, h.y);
             return (
               <circle
@@ -433,6 +422,12 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
             );
           })}
       </svg>
+
+      {editorPos && (
+        <div className="editor-pop" style={{ left: editorPos.left, top: editorPos.top, width: EDITOR_W }}>
+          <ShapeEditor />
+        </div>
+      )}
 
       <div className="scalebar" aria-label={`Scale bar ${sb.label}`}>
         <span>{sb.label}</span>

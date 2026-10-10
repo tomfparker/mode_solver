@@ -72,7 +72,7 @@ describe('computeWarnings', () => {
   it('notes custom constant-index materials and flags lossy ones', () => {
     const q = structuredClone(p);
     q.customMaterials.push({ id: 'custom:x', name: 'Polymer', n: 1.5, k: 0.001 });
-    q.stack.cladding = { material: 'custom:x' };
+    q.background = { material: 'custom:x' };
     const w = ids(computeWarnings(q, null));
     expect(w).toContain('custom-custom:x');
     expect(w).toContain('lossy-custom:x');

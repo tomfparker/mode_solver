@@ -5,7 +5,7 @@ import { uid } from '../geometry/geometry';
 import type { Project } from '../geometry/types';
 import { MockSolver } from '../solver/mockSolver';
 import { isAbortError, type Solver, type SolveResult, type SolverStatus } from '../solver/types';
-import { deleteFeature, deleteLayer, patchFeature, useStore } from '../state/store';
+import { deleteFeature, patchFeature, useStore } from '../state/store';
 import { decodeHash, encodeProject } from '../state/url';
 
 /**
@@ -157,10 +157,12 @@ export function useShortcuts() {
       if (inTextInput(e.target) || mod || e.altKey) return;
 
       const sel = s.selection;
-      if (e.key === 'Escape') s.select(null);
-      else if (e.key === 'f' || e.key === 'F') window.dispatchEvent(new Event('fit-view'));
+      if (e.key === 'Escape') {
+        // First Escape closes the pop-up editor, the second clears the selection.
+        if (s.ui.editorOpen) s.setUi({ editorOpen: false });
+        else s.select(null);
+      } else if (e.key === 'f' || e.key === 'F') window.dispatchEvent(new Event('fit-view'));
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.type === 'feature') deleteFeature(sel.id);
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.type === 'layer') deleteLayer(sel.id);
       else if (sel?.type === 'feature' && e.key.startsWith('Arrow')) {
         e.preventDefault();
         const f = s.project.features.find((x) => x.id === sel.id);

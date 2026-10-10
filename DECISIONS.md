@@ -92,3 +92,11 @@ A single list read top → bottom like the cross-section: cladding, then each la
 
 ## 2026-10-10 — Solve button labelled "Run"
 The maintainer calls it a run button.
+
+## 2026-10-10 — Maintainer: background material + shapes replace the layer stack (project version 2)
+- A background material fills the plane. Every other region is a shape with absolute coordinates, and list order decides overlap (later = on top). There are no anchors any more: thickening a BOX no longer moves the core, and snapping to other shapes' edges handles re-alignment.
+- **Full-width rectangles** model substrates, BOX layers and films. They span the whole plane horizontally (the window never sees an artificial side edge), only move vertically, and have top/bottom handles only. They are ignored when auto-sizing the solve window (otherwise a deep substrate would inflate it). Templates make substrates 50 µm deep (semi-infinite in practice). "+ Layer" adds one on top of the existing layers, listed below finite shapes.
+- **Pop-up editor**: clicking a shape on the canvas or in the list opens its editor beside it (it replaces the side Properties panel). A press that moves less than 3 px is a click, not a drag. Escape closes the editor, a second Escape deselects, and clicking empty canvas closes it.
+- **Version-1 links migrate automatically**: cladding → background; substrate → a 100 µm-deep full-width rectangle; layers → full-width rectangles; anchored shapes → absolute y.
+- The mock's "core" is now the highest-index finite shape (plus neighbours within 250 nm).
+Supersedes the 2026-10-05 "features are anchored to layer surfaces" and 2026-10-10 "one structure list (option A)" entries.

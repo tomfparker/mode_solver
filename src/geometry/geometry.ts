@@ -2,7 +2,7 @@
 
 import { indexAt, maxIndexAt } from '../materials/library';
 import type { Axis } from '../materials/types';
-import type { Anchor, Feature, GradedFeature, Layer, MaterialUse, Project, ShapeFeature } from './types';
+import type { Feature, GradedFeature, MaterialUse, Project, RectFeature, ShapeFeature } from './types';
 
 export interface Box {
   x0: number;
@@ -11,62 +11,41 @@ export interface Box {
   y1: number;
 }
 
+/** Stand-in for "infinite" horizontal extent of full-width shapes, µm. */
+export const FAR = 1e4;
+
 let counter = 0;
 export function uid(prefix = 'id'): string {
   counter += 1;
   return `${prefix}${Date.now().toString(36).slice(-4)}${counter.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 }
 
-/** y of the top surface of each layer (bottom → top), with the layer's bottom. */
-export function layerBounds(p: Project): { layer: Layer; y0: number; y1: number }[] {
-  let y = 0;
-  return p.stack.layers.map((layer) => {
-    const y0 = y;
-    y += layer.thickness;
-    return { layer, y0, y1: y };
-  });
+export function isFullWidth(f: Feature): f is RectFeature & { fullWidth: true } {
+  return f.kind === 'rect' && !!f.fullWidth;
 }
 
-export function stackTop(p: Project): number {
-  return p.stack.layers.reduce((s, l) => s + l.thickness, 0);
-}
-
-/** Absolute y of an anchor surface. Unknown anchors (e.g. a deleted layer) fall back to 0. */
-export function anchorY(p: Project, anchor: Anchor): number {
-  if (anchor === 'substrate') return 0;
-  const b = layerBounds(p).find((l) => l.layer.id === anchor);
-  return b ? b.y1 : 0;
-}
-
-export function anchorLabel(p: Project, anchor: Anchor): string {
-  if (anchor === 'substrate') return 'substrate';
-  return p.stack.layers.find((l) => l.id === anchor)?.name ?? 'substrate';
-}
-
-/** Outline of a polygonal shape in absolute coordinates (counter-clockwise). Circles return null. */
-export function shapePolygon(p: Project, f: ShapeFeature): [number, number][] | null {
-  const ay = anchorY(p, f.anchor);
+/** Outline of a polygonal shape (counter-clockwise). Circles return null. */
+export function shapePolygon(f: ShapeFeature): [number, number][] | null {
   switch (f.kind) {
     case 'rect': {
-      const y0 = ay + f.y;
+      const x0 = f.fullWidth ? -FAR : f.x - f.width / 2;
+      const x1 = f.fullWidth ? FAR : f.x + f.width / 2;
       return [
-        [f.x - f.width / 2, y0],
-        [f.x + f.width / 2, y0],
-        [f.x + f.width / 2, y0 + f.height],
-        [f.x - f.width / 2, y0 + f.height],
+        [x0, f.y],
+        [x1, f.y],
+        [x1, f.y + f.height],
+        [x0, f.y + f.height],
       ];
     }
-    case 'trapezoid': {
-      const y0 = ay + f.y;
+    case 'trapezoid':
       return [
-        [f.x - f.widthBottom / 2, y0],
-        [f.x + f.widthBottom / 2, y0],
-        [f.x + f.widthTop / 2, y0 + f.height],
-        [f.x - f.widthTop / 2, y0 + f.height],
+        [f.x - f.widthBottom / 2, f.y],
+        [f.x + f.widthBottom / 2, f.y],
+        [f.x + f.widthTop / 2, f.y + f.height],
+        [f.x - f.widthTop / 2, f.y + f.height],
       ];
-    }
     case 'polygon':
-      return f.points.map(([px, py]) => [f.x + px, ay + f.y + py]);
+      return f.points.map(([px, py]) => [f.x + px, f.y + py]);
     case 'circle':
       return null;
   }
@@ -78,14 +57,13 @@ export function gradedExtent(f: GradedFeature): { hx: number; hyUp: number; hyDo
   return { hx, hyUp: f.profileY === 'half-gaussian' ? 0 : f.wy, hyDown: f.wy };
 }
 
-export function featureBox(p: Project, f: Feature): Box {
-  const ay = anchorY(p, f.anchor);
-  if (f.kind === 'circle') return { x0: f.x - f.radius, x1: f.x + f.radius, y0: ay + f.y - f.radius, y1: ay + f.y + f.radius };
+export function featureBox(f: Feature): Box {
+  if (f.kind === 'circle') return { x0: f.x - f.radius, x1: f.x + f.radius, y0: f.y - f.radius, y1: f.y + f.radius };
   if (f.kind === 'graded') {
     const e = gradedExtent(f);
-    return { x0: f.x - e.hx, x1: f.x + e.hx, y0: ay + f.y - e.hyDown, y1: ay + f.y + e.hyUp };
+    return { x0: f.x - e.hx, x1: f.x + e.hx, y0: f.y - e.hyDown, y1: f.y + e.hyUp };
   }
-  const poly = shapePolygon(p, f)!;
+  const poly = shapePolygon(f)!;
   const xs = poly.map((q) => q[0]);
   const ys = poly.map((q) => q[1]);
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
@@ -101,12 +79,17 @@ export function unionBox(boxes: Box[]): Box | null {
   }));
 }
 
-/** Bounding box of the guiding structure: all features, or the finite layers if there are none. */
+/**
+ * Bounding box of the guiding structure, which sizes the solve window: all finite shapes.
+ * Full-width shapes (substrate, BOX, films) are ignored, since they extend past any window anyway.
+ * With only full-width shapes (a slab guide), the thinnest one is used.
+ */
 export function structureBox(p: Project): Box {
-  const fb = unionBox(p.features.map((f) => featureBox(p, f)));
-  if (fb) return fb;
-  const top = stackTop(p);
-  return { x0: -1, x1: 1, y0: 0, y1: Math.max(top, 0.1) };
+  const finite = unionBox(p.features.filter((f) => !isFullWidth(f)).map(featureBox));
+  if (finite) return finite;
+  const slabs = p.features.filter(isFullWidth).sort((a, b) => a.height - b.height);
+  if (slabs.length) return { x0: -1, x1: 1, y0: slabs[0].y, y1: slabs[0].y + slabs[0].height };
+  return { x0: -1, x1: 1, y0: -0.5, y1: 0.5 };
 }
 
 /** Auto padding grows with λ and with the structure size (big cores have big modes). */
@@ -141,12 +124,13 @@ function inPolygon(poly: [number, number][], x: number, y: number): boolean {
   return inside;
 }
 
-export function insideShape(p: Project, f: ShapeFeature, x: number, y: number): boolean {
-  if (f.kind === 'circle') {
-    const cy = anchorY(p, f.anchor) + f.y;
-    return (x - f.x) ** 2 + (y - cy) ** 2 <= f.radius ** 2;
+export function insideShape(f: ShapeFeature, x: number, y: number): boolean {
+  if (f.kind === 'circle') return (x - f.x) ** 2 + (y - f.y) ** 2 <= f.radius ** 2;
+  if (f.kind === 'rect') {
+    const inX = f.fullWidth || Math.abs(x - f.x) <= f.width / 2;
+    return inX && y >= f.y && y < f.y + f.height;
   }
-  return inPolygon(shapePolygon(p, f)!, x, y);
+  return inPolygon(shapePolygon(f)!, x, y);
 }
 
 function erf(x: number): number {
@@ -159,37 +143,25 @@ function erf(x: number): number {
 }
 
 /** Δn contributed by a graded feature at (x, y). */
-export function gradedDeltaN(p: Project, f: GradedFeature, x: number, y: number): number {
+export function gradedDeltaN(f: GradedFeature, x: number, y: number): number {
   const u = x - f.x;
-  const v = y - (anchorY(p, f.anchor) + f.y);
+  const v = y - f.y;
   const fx =
     f.profileX === 'gaussian'
       ? Math.exp(-((u / f.wx) ** 2))
-      : 0.5 * (erf((f.stripWidth / 2 + u) / f.wx) + erf((f.stripWidth / 2 - u) / f.wx)) /
+      : (0.5 * (erf((f.stripWidth / 2 + u) / f.wx) + erf((f.stripWidth / 2 - u) / f.wx))) /
         erf(f.stripWidth / 2 / f.wx || 1e-9);
   if (f.profileY === 'half-gaussian' && v > 0) return 0;
   return f.deltaN * fx * Math.exp(-((v / f.wy) ** 2));
 }
 
-/** The material (and Δn) occupying a point, ignoring graded features. */
+/** The material (and Δn) occupying a point, ignoring graded features: the topmost shape there. */
 export function materialAt(p: Project, x: number, y: number): { use: MaterialUse; deltaN: number; owner: string } {
-  let use: MaterialUse = p.stack.cladding;
-  let owner = 'cladding';
-  if (y < 0) {
-    use = p.stack.substrate;
-    owner = 'substrate';
-  } else {
-    for (const b of layerBounds(p)) {
-      if (y >= b.y0 && y < b.y1) {
-        use = b.layer;
-        owner = b.layer.id;
-        break;
-      }
-    }
-  }
+  let use: MaterialUse = p.background;
+  let owner = 'background';
   let deltaN = 0;
   for (const f of p.features) {
-    if (f.kind !== 'graded' && insideShape(p, f, x, y)) {
+    if (f.kind !== 'graded' && insideShape(f, x, y)) {
       use = f;
       owner = f.id;
       deltaN = f.deltaN ?? 0;
@@ -202,28 +174,26 @@ export function materialAt(p: Project, x: number, y: number): { use: MaterialUse
 export function indexAtPoint(p: Project, x: number, y: number, axis: Axis = 'x'): number {
   const { use, deltaN } = materialAt(p, x, y);
   let n = (indexAt(use.material, p.wavelength, p.customMaterials, axis, use.opticAxis ?? 'z')?.n ?? 1) + deltaN;
-  for (const f of p.features) if (f.kind === 'graded') n += gradedDeltaN(p, f, x, y);
+  for (const f of p.features) if (f.kind === 'graded') n += gradedDeltaN(f, x, y);
   return n;
 }
 
 /** Every material referenced by the project (for range/provenance warnings). */
 export function usedMaterials(p: Project): MaterialUse[] {
-  const uses: MaterialUse[] = [p.stack.substrate, ...p.stack.layers, p.stack.cladding];
+  const uses: MaterialUse[] = [p.background];
   for (const f of p.features) if (f.kind !== 'graded') uses.push(f);
   return uses;
 }
 
 /** Highest refractive index anywhere in the structure: the default eigensolver shift guess. */
 export function maxIndex(p: Project): number {
-  let n = 1;
-  for (const u of usedMaterials(p)) {
-    const dn = 'deltaN' in u ? ((u as { deltaN?: number }).deltaN ?? 0) : 0;
-    n = Math.max(n, maxIndexAt(u.material, p.wavelength, p.customMaterials) + Math.max(dn, 0));
-  }
+  let n = maxIndexAt(p.background.material, p.wavelength, p.customMaterials);
   for (const f of p.features) {
     if (f.kind === 'graded') {
-      const host = materialAt(p, f.x, anchorY(p, f.anchor) + f.y - 1e-6).use;
+      const host = materialAt(p, f.x, f.y - 1e-6).use;
       n = Math.max(n, maxIndexAt(host.material, p.wavelength, p.customMaterials) + Math.max(f.deltaN, 0));
+    } else {
+      n = Math.max(n, maxIndexAt(f.material, p.wavelength, p.customMaterials) + Math.max(f.deltaN ?? 0, 0));
     }
   }
   return n;

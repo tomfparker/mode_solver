@@ -193,7 +193,7 @@ button, input, select { font: inherit; color: inherit; }
 .row.selected { border-color: var(--accent); background: var(--accent-soft); }
 .row .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--geo-stroke); }
 .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .meta { color: var(--text-3); font-size: 12px; white-space: nowrap; }
+.row .meta { color: var(--text-3); font-size: 12px; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; justify-self: end; }
 .row.semi .name { color: var(--text-2); font-style: italic; }
 .row.shape { margin-left: 14px; }
 .row[draggable='true'] { cursor: grab; }
@@ -323,3 +323,17 @@ details.advanced[open] summary { margin-bottom: 8px; }
 }
 .notice.warn { background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn-border); }
 .notice button { background: transparent; border: 0; cursor: pointer; color: inherit; opacity: 0.7; }
+
+/* ---- Pop-up shape editor ------------------------------------------------------------- */
+.editor-pop {
+  position: absolute; z-index: 5;
+  max-height: calc(100% - 56px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  padding: 8px 12px 12px;
+}
+.editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.editor-head b { font-size: 13px; }
+.editor-pop .props { grid-template-columns: 86px 1fr; }
+label.check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-2); }
+.layer-tag { color: var(--text-3); margin-right: 4px; }
