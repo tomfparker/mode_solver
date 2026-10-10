@@ -12,8 +12,10 @@ import numpy as np
 
 from .api import solve_project
 
-#: Mesh quality presets: multiplier on all target cell sizes.
-MESH_SCALE = {"fast": 1.4, "standard": 1.0, "fine": 0.7}
+#: Mesh quality presets: multiplier on all target cell sizes (mesh.py constants = scale 1).
+#: Chosen from benchmarks/sweep.py (docs/benchmarks-m2.md): worst n_eff error over the five
+#: reference cases is ~2.6e-3 (fast), ~7e-4 (standard) and ~6e-4 (fine).
+MESH_SCALE = {"fast": 2.0, "standard": 1.3, "fine": 0.8}
 
 #: The most recent solve (native-mesh fields included), kept for coupling calculations (M3).
 last_result = None

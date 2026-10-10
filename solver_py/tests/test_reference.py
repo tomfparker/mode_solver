@@ -6,7 +6,8 @@ femwell is the primary reference where available (isotropic cases): its mesh fol
 shape edges and it reports sub-1e-4 convergence. Tidy3D runs locally without subpixel
 smoothing, which biases high-contrast cases, so its own uncertainty estimate is honoured.
 
-Targets (CLAUDE.md): n_eff within ~1e-3, mode size within ~10%, at the default mesh.
+Targets (CLAUDE.md): n_eff within ~1e-3, mode size within ~10%, at the default ("standard")
+mesh preset the app uses.
 """
 
 import json
@@ -16,6 +17,7 @@ import pytest
 
 from cases import CASES
 from modesolver.api import solve_project
+from modesolver.ui import MESH_SCALE
 
 REF_DIR = Path(__file__).parent / "reference"
 NEFF_TOL = 1e-3
@@ -40,11 +42,11 @@ def primary(ref):
 def ours():
     cache = {}
 
-    def run(case, quality_scale=1.0):
-        key = (case, quality_scale)
+    def run(case, quality="standard"):
+        key = (case, quality)
         if key not in cache:
             c = CASES[case]
-            cache[key] = solve_project(c["project"], c["window"], {"scale": quality_scale}, num_modes=4)
+            cache[key] = solve_project(c["project"], c["window"], {"scale": MESH_SCALE[quality]}, num_modes=4)
         return cache[key]
 
     return run
@@ -82,7 +84,7 @@ def test_fast_mesh_stays_within_three_times_the_target(case, ours):
     """The 'fast' preset trades accuracy for speed, but must stay a usable estimate."""
     ref = load(case)
     _, modes = primary(ref)
-    got = ours(case, 1.4)["modes"]
+    got = ours(case, "fast")["modes"]
     for i in range(N_COMPARE):
         tol = max(3 * NEFF_TOL, 3 * modes[i].get("neffUncertainty", 0.0))
         assert abs(got[i]["neff"].real - modes[i]["neff"]) < tol

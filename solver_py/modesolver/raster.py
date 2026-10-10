@@ -21,6 +21,7 @@ standard smoothing tensor gives  1/ε_x = n̂x²·⟨1/ε⟩ + (1 − n̂x²)/�
 import math
 
 import numpy as np
+from scipy.special import erf
 
 from .materials import index_tensor
 
@@ -59,7 +60,7 @@ def shape_mask(f, X, Y):
     raise ValueError(f"unknown shape kind {kind!r}")
 
 
-_erf = np.vectorize(math.erf, otypes=[float])
+_erf = erf
 
 
 def graded_delta_n(f, X, Y):

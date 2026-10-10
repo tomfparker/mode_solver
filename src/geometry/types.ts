@@ -98,7 +98,7 @@ export interface WindowBox {
   y1: number;
 }
 
-/** Mesh presets: 'fast' has ~half the cells of 'standard', 'fine' about twice as many. */
+/** Mesh presets (cell-size scale 2.0 / 1.3 / 0.8; see solver_py/modesolver/ui.py and docs/benchmarks-m2.md). */
 export type MeshQuality = 'fast' | 'standard' | 'fine';
 
 export interface SolverSettings {

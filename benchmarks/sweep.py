@@ -21,12 +21,12 @@ from modesolver.api import solve_project  # noqa: E402
 REF = ROOT / "solver_py" / "tests" / "reference"
 
 SETTINGS = [
-    ("fast", {"scale": 1.4}, True),
-    ("standard", {"scale": 1.0}, True),
-    ("fine", {"scale": 0.7}, True),
-    ("standard, no extrapolation", {"scale": 1.0}, False),
-    ("fine, no extrapolation", {"scale": 0.7}, False),
-    ("very fine, no extrapolation", {"scale": 0.4}, False),
+    ("fast preset (×2.0)", {"scale": 2.0}, True),
+    ("standard preset (×1.3)", {"scale": 1.3}, True),
+    ("fine preset (×0.8)", {"scale": 0.8}, True),
+    ("×1.3, no extrapolation", {"scale": 1.3}, False),
+    ("×0.8, no extrapolation", {"scale": 0.8}, False),
+    ("×0.4, no extrapolation", {"scale": 0.4}, False),
 ]
 
 

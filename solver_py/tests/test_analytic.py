@@ -145,3 +145,28 @@ def test_anisotropic_slab_matches_analytic(optic_axis, pol):
     want = aniso_slab_neff(n_core, n_clad, d, pol)
     got = [m["neff"].real for m in res["modes"] if (m["teFraction"] > 0.5) == (pol == "TE")]
     assert got and min(abs(g - want) for g in got) < 5e-4
+
+
+# ---- Graded-index (diffused) guide: sanity, no analytic reference --------------------------
+
+def test_diffused_channel_guides_between_substrate_and_peak_index():
+    """The app's diffused-channel template: an in-diffused stripe in Z-cut-like LiNbO3 under air."""
+    from modesolver.materials import index_tensor
+    from modesolver.ui import MESH_SCALE
+
+    dn = 0.01
+    sub = {"kind": "rect", "id": "s", "name": "Substrate", "material": "LiNbO3", "opticAxis": "y",
+           "x": 0, "y": -50, "width": 10, "height": 50, "fullWidth": True}
+    stripe = {"kind": "graded", "id": "g", "name": "Stripe", "x": 0, "y": 0, "deltaN": dn, "profileX": "erf-strip",
+              "stripWidth": 7, "wx": 2, "wy": 3, "profileY": "half-gaussian"}
+    p = project(LAM, "Air", [sub, stripe], [])
+    window = {"x0": -13.75, "x1": 13.75, "y0": -11.25, "y1": 8.25}  # the template's fitted window
+    res = solve_project(p, window, {"scale": MESH_SCALE["standard"]}, num_modes=2)
+    nx, ny, _ = (c.real for c in index_tensor("LiNbO3", LAM, optic_axis="y"))
+    m = res["modes"][0]
+    n_host = nx if m["teFraction"] > 0.5 else ny
+    assert n_host < m["neff"].real < n_host + dn
+    assert m["guided"]
+    # The mode sits just below the surface and is a few µm across.
+    assert 3 < m["mfd"]["x"] < 15 and 1 < m["mfd"]["y"] < 10
+    assert sum(res["timings_ms"].values()) < 5000

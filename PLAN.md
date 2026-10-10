@@ -2,7 +2,7 @@
 
 CLAUDE.md is authoritative. This file breaks the milestones into tasks, lists risks, and records open questions. M0 and M1 are detailed. M2–M6 are outlined and will be refined at the start of each milestone.
 
-Status: **M1 complete, awaiting review** (2026-10-05). M0 reviewed. Q1–Q4 answered (see DECISIONS.md).
+Status: **M2 complete, awaiting review** (2026-10-10). M0 and M1 reviewed. See docs/benchmarks-m2.md for solver accuracy and speed.
 
 ---
 

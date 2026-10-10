@@ -118,9 +118,9 @@ export function SimulationPanel() {
           </select>
           <label title="The mesh is finest in and around the shapes and coarser towards the window edges">Mesh</label>
           <select className="field" value={st.meshQuality ?? 'standard'} onChange={(e) => set('meshQuality', e.target.value as MeshQuality)} aria-label="Mesh quality">
-            <option value="fast">Fast (coarser, ~2× quicker)</option>
-            <option value="standard">Standard</option>
-            <option value="fine">Fine (slower, more accurate)</option>
+            <option value="fast">Fast (n_eff to ~3e-3)</option>
+            <option value="standard">Standard (n_eff to ~1e-3)</option>
+            <option value="fine">Fine (2–3× slower)</option>
           </select>
           <label>Boundary</label>
           <span className="limits" title="Absorbing (PML) boundaries are planned">Metal walls at the window edges</span>
