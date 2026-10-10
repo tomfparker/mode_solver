@@ -7,7 +7,8 @@ Derivation. With H' = η₀H and ∂z → iβ, Maxwell's curl equations on the Y
     i·k₀·H'x = Uy·Ez − iβ·Ey          −i·k₀·εx·Ex = Vy·H'z − iβ·H'y
     i·k₀·H'y = iβ·Ex − Ux·Ez          −i·k₀·εy·Ey = iβ·H'x − Vx·H'z
     i·k₀·H'z = Ux·Ey − Uy·Ex          −i·k₀·εz·Ez = Vx·H'y − Vy·H'x
-U = forward difference (E → H locations), V = backward difference (H → E locations), V = −Uᵀ.
+U = forward difference (E → H locations), V = backward difference (H → E locations); on a
+uniform mesh V = −Uᵀ.
 The discrete divergence of the right-hand column vanishes identically, giving
     Ez = (i/β)·εz⁻¹·(Vx·εx·Ex + Vy·εy·Ey).
 Substituting H' and Ez into the Ex and Ey equations leaves an eigenproblem in (Ex, Ey):
@@ -30,27 +31,35 @@ ETA0 = 376.730313668  # Ω, μ₀·c
 KINDS = ("scalar", "semivector-te", "semivector-tm", "fullvector")
 
 
-def difference_ops(nx, ny, dx, dy):
-    """Forward (U) and backward (V) differences on an nx×ny grid, zero outside the window.
+def difference_ops(dx, dy):
+    """Forward (U) and backward (V) differences for cell sizes dx (nx values) and dy (ny values).
 
-    Unknowns are flattened row-major: index = j·nx + i (x fastest). Built from per-axis 1-D
-    operators, so a non-uniform mesh only needs different 1-D matrices.
+    U maps node → cell-centre values along its axis (divide by the cell size); V maps
+    cell-centre → node values (divide by the distance between neighbouring cell centres).
+    Fields are zero outside the window. Unknowns are flattened row-major: index = j·nx + i.
     """
 
-    def fwd(n, d):
-        return sp.diags([-np.ones(n), np.ones(n - 1)], [0, 1], shape=(n, n)) / d
+    def pair(d):
+        n = len(d)
+        dual = np.empty(n)
+        dual[0] = d[0]
+        dual[1:] = 0.5 * (d[:-1] + d[1:])
+        fwd = sp.diags([-np.ones(n), np.ones(n - 1)], [0, 1], shape=(n, n))
+        bwd = sp.diags([np.ones(n), -np.ones(n - 1)], [0, -1], shape=(n, n))
+        return sp.diags(1 / d) @ fwd, sp.diags(1 / dual) @ bwd
 
-    ix, iy = sp.identity(nx), sp.identity(ny)
-    ux = sp.kron(iy, fwd(nx, dx), format="csr")
-    uy = sp.kron(fwd(ny, dy), ix, format="csr")
-    return ux, (-ux.T).tocsr(), uy, (-uy.T).tocsr()
+    fx, bx = pair(np.asarray(dx, dtype=float))
+    fy, by = pair(np.asarray(dy, dtype=float))
+    ix, iy = sp.identity(len(dx)), sp.identity(len(dy))
+    return (sp.kron(iy, fx, format="csr"), sp.kron(iy, bx, format="csr"),
+            sp.kron(fy, ix, format="csr"), sp.kron(by, ix, format="csr"))
 
 
 def build_operator(grid, wavelength, kind="fullvector"):
     """Sparse operator P with P·E = β²·E for the chosen solver kind, plus the pieces needed later."""
     ny, nx = grid["ezz"].shape
     k0 = 2 * np.pi / wavelength
-    ux, vx, uy, vy = difference_ops(nx, ny, grid["dx"], grid["dy"])
+    ux, vx, uy, vy = difference_ops(grid["dx"], grid["dy"])
     exx, eyy, ezz = (grid[c].ravel() for c in ("exx", "eyy", "ezz"))
     # Lossless structures get a real matrix: real LU and Arnoldi are about twice as fast as complex.
     if not any(np.iscomplexobj(a) and np.any(a.imag != 0) for a in (exx, eyy, ezz)):
@@ -145,8 +154,9 @@ def reconstruct(vec, beta2, ops, kind):
 
 
 def normalise_power(f, dx, dy):
-    """Scale fields in place to ½·Re∫(E×H*)·ẑ dA = 1. Returns the original power."""
-    p = 0.5 * np.real(np.sum(f["Ex"] * np.conj(f["Hy"]) - f["Ey"] * np.conj(f["Hx"]))) * dx * dy
+    """Scale fields in place to ½·Re∫(E×H*)·ẑ dA = 1 (dx, dy: cell sizes). Returns the original power."""
+    area = np.outer(dy, dx)
+    p = 0.5 * np.real(np.sum((f["Ex"] * np.conj(f["Hy"]) - f["Ey"] * np.conj(f["Hx"])) * area))
     s = 1 / np.sqrt(abs(p)) if p != 0 else 1.0
     for k in f:
         f[k] = f[k] * s
@@ -207,10 +217,35 @@ def mode_metrics(f, x, y):
 EDGE_FRACTION_LIMIT = 0.1
 
 
-def solve(grid, wavelength, num_modes=4, kind="fullvector", n_guess=None):
-    """Solve for modes on a rasterised grid. Returns (modes, timings_ms).
+def _interp_axis(src, dst):
+    i = np.clip(np.searchsorted(src, dst) - 1, 0, len(src) - 2)
+    t = np.clip((dst - src[i]) / (src[i + 1] - src[i]), 0.0, 1.0)
+    return i, t
 
-    Each mode: dict with neff (complex), fields (centred, unit power), metrics, guided flag.
+
+def resample(a, x, y, xu, yu):
+    """Bilinear resampling of a (ny, nx) array from cell centres (x, y) onto (xu, yu)."""
+    ix, tx = _interp_axis(x, xu)
+    iy, ty = _interp_axis(y, yu)
+    b = a[:, ix] * (1 - tx) + a[:, ix + 1] * tx
+    return b[iy] * (1 - ty)[:, None] + b[iy + 1] * ty[:, None]
+
+
+def display_axes(grid, cells=128):
+    """Uniform cell-centre coordinates covering the window, `cells` along the longer side."""
+    xl, yl = grid["xl"], grid["yl"]
+    w, h = xl[-1] - xl[0], yl[-1] - yl[0]
+    d = max(w, h) / cells
+    nxu, nyu = max(16, int(round(w / d))), max(16, int(round(h / d)))
+    return xl[0] + (np.arange(nxu) + 0.5) * w / nxu, yl[0] + (np.arange(nyu) + 0.5) * h / nyu
+
+
+def solve(grid, wavelength, num_modes=4, kind="fullvector", n_guess=None, display_cells=128):
+    """Solve for modes on a rasterised grid. Returns (modes, display, timings_ms).
+
+    Each mode: neff (complex), `fields` on the uniform display grid (unit power), `native`
+    fields on the solver mesh, metrics, and a guided flag. `display` holds the display grid
+    (x, y) and the index map resampled onto it.
     """
     t = {}
     t0 = time.perf_counter()
@@ -220,12 +255,15 @@ def solve(grid, wavelength, num_modes=4, kind="fullvector", n_guess=None):
     beta2, vecs = eigensolve(p, ops["k0"], n_guess if n_guess else grid["n_max"], num_modes)
     t["eigensolve"] = (time.perf_counter() - t0) * 1e3
     t0 = time.perf_counter()
+    xu, yu = display_axes(grid, display_cells)
     modes = []
     for m in range(len(beta2)):
         f = reconstruct(vecs[:, m], beta2[m], ops, kind)
         normalise_power(f, grid["dx"], grid["dy"])
-        met = mode_metrics(f, grid["x"], grid["y"])
+        fu = {k: resample(v, grid["x"], grid["y"], xu, yu) for k, v in f.items()}
+        met = mode_metrics(fu, xu, yu)
         neff = complex(np.sqrt(beta2[m]) / ops["k0"])
-        modes.append({"neff": neff, "fields": f, "guided": met["edgeFraction"] < EDGE_FRACTION_LIMIT, **met})
+        modes.append({"neff": neff, "fields": fu, "native": f, "guided": met["edgeFraction"] < EDGE_FRACTION_LIMIT, **met})
+    display = {"x": xu, "y": yu, "n": resample(grid["n_centre"], grid["x"], grid["y"], xu, yu)}
     t["post"] = (time.perf_counter() - t0) * 1e3
-    return modes, t
+    return modes, display, t

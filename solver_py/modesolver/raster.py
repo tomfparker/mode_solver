@@ -100,60 +100,91 @@ def index_fields(project, X, Y):
     return n
 
 
-def _box_mean(a, S, ox, oy, nx, ny, w=None, h=None):
-    """Mean of `a` over boxes of w×h sub-cells whose lower-left sub-cell is (ox + i·S, oy + j·S)."""
-    w = S if w is None else w
-    h = S if h is None else h
+def _integral(a):
     c = np.zeros((a.shape[0] + 1, a.shape[1] + 1), dtype=a.dtype)
     c[1:, 1:] = a.cumsum(0).cumsum(1)
-    j0 = oy + S * np.arange(ny)[:, None]
-    i0 = ox + S * np.arange(nx)[None, :]
-    return (c[j0 + h, i0 + w] - c[j0, i0 + w] - c[j0 + h, i0] + c[j0, i0]) / (w * h)
+    return c
 
 
-def rasterise(project, window, nx, ny, supersample=8):
-    """Permittivity on the Yee grid.
+class _Boxes:
+    """Area-weighted means over boxes of sub-cells (cells may differ in size)."""
 
-    window: dict with x0, x1, y0, y1. Returns a dict with exx (at Ex), eyy (at Ey), ezz (at Ez),
-    n_centre (real index at cell centres, for display), x and y (cell-centre coordinates),
-    dx, dy, and n_max (largest real index in the window).
+    def __init__(self, wx, wy, S, nx, ny):
+        self.S, self.nx, self.ny = S, nx, ny
+        self.w = np.outer(wy, wx)  # sub-cell areas
+        self.cw = _integral(self.w)
+
+    def _sum(self, c, ox, oy, w, h):
+        j0 = oy + self.S * np.arange(self.ny)[:, None]
+        i0 = ox + self.S * np.arange(self.nx)[None, :]
+        return c[j0 + h, i0 + w] - c[j0, i0 + w] - c[j0 + h, i0] + c[j0, i0]
+
+    def mean(self, a, ox, oy, w=None, h=None):
+        """Mean of `a` over boxes of w×h sub-cells with lower-left sub-cell (ox + i·S, oy + j·S)."""
+        w = self.S if w is None else w
+        h = self.S if h is None else h
+        return self._sum(_integral(a * self.w), ox, oy, w, h) / self._sum(self.cw, ox, oy, w, h)
+
+
+def _sub_axis(lines, S):
+    """Sub-sample coordinates and widths: S per cell, padded by one copy of each edge cell."""
+    d = np.diff(lines)
+    d = np.concatenate([[d[0]], d, [d[-1]]])
+    starts = np.concatenate([[lines[0] - d[0]], lines])  # left edge of each (padded) cell
+    k = (np.arange(S) + 0.5) / S
+    coords = (starts[:, None] + d[:, None] * k[None, :]).ravel()
+    widths = np.repeat(d / S, S)
+    return coords, widths
+
+
+def rasterise(project, xl, yl, supersample=8):
+    """Permittivity on the Yee grid defined by mesh lines xl (nx+1 values) and yl (ny+1).
+
+    Returns a dict with exx (at Ex), eyy (at Ey), ezz (at Ez), n_centre (real index at cell
+    centres), the lines, cell centres x/y, cell sizes dx/dy (arrays), and n_max.
     """
     S = int(supersample)
     if S < 2 or S % 2:
         raise ValueError("supersample must be an even integer ≥ 2")
-    x0, x1, y0, y1 = window["x0"], window["x1"], window["y0"], window["y1"]
-    dx = (x1 - x0) / nx
-    dy = (y1 - y0) / ny
+    xl = np.asarray(xl, dtype=float)
+    yl = np.asarray(yl, dtype=float)
+    nx, ny = len(xl) - 1, len(yl) - 1
     H = S // 2
-    # Sub-grid padded by half a cell on every side, so boxes centred on edge locations fit.
-    xs = x0 - dx / 2 + (np.arange(nx * S + S) + 0.5) * dx / S
-    ys = y0 - dy / 2 + (np.arange(ny * S + S) + 0.5) * dy / S
+    # The padded sub-grid starts one cell before the window; box offsets below are relative
+    # to half a cell before the window, hence the extra H.
+    xs, wx = _sub_axis(xl, S)
+    ys, wy = _sub_axis(yl, S)
     X, Y = np.meshgrid(xs, ys)
     n_x, n_y, n_z = index_fields(project, X, Y)
     e = {"x": n_x**2, "y": n_y**2, "z": n_z**2}
+    boxes = _Boxes(wx, wy, S, nx, ny)
+    ref = e["z"].real
 
     def smooth(comp, ox, oy, normal_axis):
-        """Effective ε for the field component `comp` located at box offset (ox, oy)."""
+        """Effective ε for the field component `comp` whose box starts at sub-offset (ox, oy)."""
         eps = e[comp]
-        mean = _box_mean(eps, S, ox, oy, nx, ny)
+        mean = boxes.mean(eps, ox, oy)
         if normal_axis is None:
             return mean  # z: always tangential
-        inv = _box_mean(1 / eps, S, ox, oy, nx, ny)
+        inv = boxes.mean(1 / eps, ox, oy)
         # Interface normal from the gradient of ε across the box (difference of half-box means).
-        ref = e["z"].real
-        gx = _box_mean(ref, S, ox + H, oy, nx, ny, w=H) - _box_mean(ref, S, ox, oy, nx, ny, w=H)
-        gy = _box_mean(ref, S, ox, oy + H, nx, ny, h=H) - _box_mean(ref, S, ox, oy, nx, ny, h=H)
+        gx = boxes.mean(ref, ox + H, oy, w=H) - boxes.mean(ref, ox, oy, w=H)
+        gy = boxes.mean(ref, ox, oy + H, h=H) - boxes.mean(ref, ox, oy, h=H)
         g2 = gx**2 + gy**2
         with np.errstate(invalid="ignore", divide="ignore"):
             p = np.where(g2 > 0, (gx if normal_axis == "x" else gy) ** 2 / g2, 0.0)
         return 1 / (p * inv + (1 - p) / mean)
 
-    exx = smooth("x", H, 0, "x")
-    eyy = smooth("y", 0, H, "y")
-    ezz = smooth("z", 0, 0, None)
-    n_centre = np.sqrt(_box_mean(e["z"], S, H, H, nx, ny)).real
+    # Box lower-left offsets in padded sub-cells: a node-centred box starts half a cell before
+    # the node (H into the previous cell), a cell-centred box starts at the cell (S).
+    node, cell = H, S
+    exx = smooth("x", cell, node, "x")  # Ex at (cell centre, node)
+    eyy = smooth("y", node, cell, "y")  # Ey at (node, cell centre)
+    ezz = smooth("z", node, node, None)  # Ez at (node, node)
+    n_centre = np.sqrt(boxes.mean(e["z"], cell, cell)).real
     n_max = float(max(np.sqrt(a).real.max() for a in e.values()))
     return {
         "exx": exx, "eyy": eyy, "ezz": ezz, "n_centre": n_centre, "n_max": n_max,
-        "x": x0 + (np.arange(nx) + 0.5) * dx, "y": y0 + (np.arange(ny) + 0.5) * dy, "dx": dx, "dy": dy,
+        "xl": xl, "yl": yl, "x": 0.5 * (xl[:-1] + xl[1:]), "y": 0.5 * (yl[:-1] + yl[1:]),
+        "dx": np.diff(xl), "dy": np.diff(yl),
     }
