@@ -106,3 +106,36 @@ Supersedes the 2026-10-05 "features are anchored to layer surfaces" and 2026-10-
 - The left-panel "Simulation" section has an **auto-size to structure** tick box. When ticked it shows padding; when unticked it shows width, height, centre x/y and a one-off "Fit to structure". It also holds the mode count, and a collapsed "Solver and mesh" part (solver, mesh step, boundary, n guess) that replaces the right panel's Advanced section.
 - The boundary warning's fix enlarges a fixed window by 50% about its centre (or raises the padding when auto).
 - Links without `settings.window` (older v2 links) load as auto-sized, matching how they behaved when made. No version bump is needed: the field is optional.
+
+## 2026-10-10 — Maintainer: benchmark against open-source solvers; prefer speed over absolute accuracy
+- **References:** femwell 0.1.12 (finite elements, GPL-3) and Tidy3D 2.12.0's local mode solver (finite differences, LGPL), run by `benchmarks/run_reference.py` in a separate `.venv-bench` (gitignored). They are dev tools only: nothing from them is imported by the app or solver, and only their output numbers are stored (`solver_py/tests/reference/*.json`, with versions, settings and date). Our MIT licence is unaffected.
+- **femwell is the primary reference for isotropic cases.** Its mesh follows shape edges and two mesh levels agree to < 1e-4. Tidy3D's local solver has no subpixel smoothing (that needs their cloud or `tidy3d-extras`, which declares no licence, so it isn't used); on the SOI strip it is biased by about +0.014 at 10 nm cells, so its extrapolated values carry their own uncertainty, which the tests honour. femwell cannot do anisotropic materials, so the LN ridge relies on Tidy3D plus an analytic anisotropic-slab test and an isotropic ridge of the same shape checked by femwell.
+- These generated references sit alongside, not instead of, the maintainer's Lumerical/Tidy3D values requested in CLAUDE.md.
+
+## 2026-10-10 — Solver formulation
+Full-vector operator in (Ex, Ey) derived directly from Maxwell's equations on the Yee grid (derivation in `solver_py/modesolver/fd.py`), with E_z eliminated through the discrete divergence condition. Diagonal anisotropy. Semi-vector = one diagonal block; scalar = Helmholtz. Verified against: analytic slab TE/TM, analytic uniaxial slab (three optic-axis orientations), exact fibre LP01 (n_eff to ~5e-6, mode size < 1%), femwell and Tidy3D. References confirmed via Crossref: Zhu & Brown, Opt. Express 10, 853 (2002), doi:10.1364/OE.10.000853; Fallahkhair, Li & Murphy, J. Lightwave Technol. 26, 1423 (2008), doi:10.1109/JLT.2008.923643. No philsol code was used.
+
+## 2026-10-10 — Non-uniform mesh snapped to shape edges, sized by decay length
+A uniform mesh needed 10–15 nm cells (7–22 s per solve) to reach 1e-3 on the SOI strip. The solver mesh is now graded: lines sit on shape edges; each shape gets cells of L/5, where L = λ/(2π·NA) is the shortest field decay length it can support (NA² = n_shape² − n_lowest²), kept uniform for 1.5 L beyond the shape, then growing 30% per cell up to λ/(5·n_background). At least 6 cells span a shape's smallest dimension. This one rule scales from silicon wires (L ≈ 78 nm) to fibres (L ≈ 2 µm). Fields are resampled to a uniform ≤128-cell display grid for the UI and for mode-size metrics.
+**Why not index-following cell sizes alone:** TE modes need fine cells in the cladding just outside the core (steep evanescent tail), not only inside it. Measured in the sweep.
+
+## 2026-10-10 — Two-mesh Richardson extrapolation of n_eff (default)
+The discretisation error is cleanly second order in cell size (measured). Each solve also runs a mesh with 1.4× larger cells; modes are matched by field overlap and n_eff is extrapolated. This costs roughly half as much again and cuts the n_eff error several-fold (SOI strip TM0: +5.9e-3 → +9e-4). Fields and mode sizes come from the finer mesh. `neffRaw` keeps the un-extrapolated value.
+
+## 2026-10-10 — LU ordering reversed from the M0 decision: SuperLU default (COLAMD), real arithmetic
+On the real operator, MMD_AT_PLUS_A factorises in 1.2–1.6 s against ~190 ms for COLAMD (100×100 full-vector), the opposite of what the M0 stand-in matrix showed. Lossless structures build a real matrix (about 2× faster than complex). Supersedes the 2026-10-04 "MMD_AT_PLUS_A" entry.
+
+## 2026-10-10 — Mode size definition
+`mfd` = full width of |E|² at 1/e² of its peak, along the row and column through the peak (outermost crossings), as a camera line-cut would give. The second-moment (D4σ) widths are also returned (`mfdD4s`). The maintainer was offered the choice and didn't state a preference; this is the default I proposed.
+
+## 2026-10-10 — "Guided" for the real solver
+A mode with more than 10% of its |E|² in the outer 5% band of the window is flagged not guided: it lives against the walls (window/slab/substrate-slice modes). The auto-sized window stops at the surface of a separated higher-index layer (e.g. substrate under the BOX) so templates don't pick up substrate-slice modes; with a hand-set window that includes one, the UI warns.
+
+## 2026-10-10 — Boundaries: metal walls only for now
+Fields are zero outside the window. The PMC option was removed from the UI until it is implemented; PML remains future work (lossy results are flagged approximate).
+
+## 2026-10-10 — Mesh setting is a quality preset
+Fast / Standard / Fine scale all target cell sizes by 1.4 / 1.0 / 0.7. The old uniform `meshStep` field is kept in the schema for the mock solver and old links but is no longer shown.
+
+## 2026-10-10 — Mistake recorded: benchmark venv was committed, then removed
+`.venv-bench` (19k files) was swept into a commit by `git add -A`. It was caught before any push; the commit was amended, the directory gitignored, and the objects pruned. Staging is now done with explicit paths.

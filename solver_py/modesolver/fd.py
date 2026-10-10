@@ -215,6 +215,8 @@ def mode_metrics(f, x, y):
 #: A mode with more than this fraction of its |E|² in the outer 5% band of the window is a
 #: "window mode" (it lives against the walls, e.g. in a substrate slice), not a guided mode.
 EDGE_FRACTION_LIMIT = 0.1
+#: A mode whose second-moment width exceeds this fraction of the window in x or y is a window mode.
+WINDOW_FILL_LIMIT = 0.6
 
 
 def _interp_axis(src, dst):
@@ -256,6 +258,7 @@ def solve(grid, wavelength, num_modes=4, kind="fullvector", n_guess=None, displa
     t["eigensolve"] = (time.perf_counter() - t0) * 1e3
     t0 = time.perf_counter()
     xu, yu = display_axes(grid, display_cells)
+    width, height = grid["xl"][-1] - grid["xl"][0], grid["yl"][-1] - grid["yl"][0]
     modes = []
     for m in range(len(beta2)):
         f = reconstruct(vecs[:, m], beta2[m], ops, kind)
@@ -263,7 +266,11 @@ def solve(grid, wavelength, num_modes=4, kind="fullvector", n_guess=None, displa
         fu = {k: resample(v, grid["x"], grid["y"], xu, yu) for k, v in f.items()}
         met = mode_metrics(fu, xu, yu)
         neff = complex(np.sqrt(beta2[m]) / ops["k0"])
-        modes.append({"neff": neff, "fields": fu, "native": f, "guided": met["edgeFraction"] < EDGE_FRACTION_LIMIT, **met})
+        # Guided = not living against the walls, and not spread across the whole window
+        # (slab and box modes fill it with a half-sine, D4σ ≈ 0.72 × the window).
+        spread = max(met["mfdD4s"]["x"] / width, met["mfdD4s"]["y"] / height)
+        guided = met["edgeFraction"] < EDGE_FRACTION_LIMIT and spread < WINDOW_FILL_LIMIT
+        modes.append({"neff": neff, "fields": fu, "native": f, "guided": guided, **met})
     display = {"x": xu, "y": yu, "n": resample(grid["n_centre"], grid["x"], grid["y"], xu, yu)}
     t["post"] = (time.perf_counter() - t0) * 1e3
     return modes, display, t

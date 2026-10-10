@@ -20,7 +20,10 @@ from selenium.webdriver.support.ui import Select
 
 SHOTS = os.environ.get("UI_CHECK_SHOTS", os.path.expanduser("~/snap/firefox/common/shots"))
 os.makedirs(SHOTS, exist_ok=True)
-URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:4173/"
+BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:4173/"
+# Interaction checks use the mock solver (instant, deterministic); the last section loads the
+# real solver end to end.
+URL = BASE + "?solver=mock"
 
 opts = webdriver.FirefoxOptions()
 opts.add_argument("--headless")
@@ -206,6 +209,26 @@ try:
     ok("Ex view shows 'real part'", wait(lambda: "real part" in d.find_element(By.CSS_SELECTOR, ".canvas-tools").text))
     shot("drive-6-ex")
     ok("no JS errors", not errors(), json.dumps(errors())[:300])
+
+    # Real solver, end to end: Pyodide loads, the default SiN strip solves, numbers are physical.
+    d.get("about:blank"); d.get(BASE)
+    d.execute_script("window.__errs=[]; window.addEventListener('error', e=>window.__errs.push(String(e.message))); window.addEventListener('unhandledrejection', e=>window.__errs.push(String(e.reason)));")
+    t0 = time.time()
+    ok("real solver loads and solves the default example", wait(lambda: status() == "Up to date", 180), f"{time.time() - t0:.0f} s, status {status()!r}")
+    ok("no mock banner with the real solver", not d.find_elements(By.CSS_SELECTOR, ".mock-banner"))
+    n0 = float(neff0())
+    # femwell reference for this structure: TE0 = 1.80277 (solver_py/tests/reference/sin_strip.json)
+    ok("TE0 n_eff of the SiN strip matches the reference to 1e-3", abs(n0 - 1.80277) < 1e-3, str(n0))
+    info = d.find_element(By.CSS_SELECTOR, ".panel-right").text
+    ok("solver diagnostics shown (mesh and time)", "mesh" in info and "cells" in info)
+    d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
+    cw = d.find_element(By.CSS_SELECTOR, "input[aria-label='Width']")
+    cw.send_keys(Keys.CONTROL, "a"); cw.send_keys("700", Keys.ENTER)
+    click_solve()
+    t0 = time.time()
+    ok("re-solve after an edit gives a lower n_eff for a narrower core", wait(lambda: status() == "Up to date" and float(neff0()) < n0 - 0.01, 60), f"{neff0()} in {time.time() - t0:.1f} s")
+    shot("drive-7-real")
+    ok("no JS errors with the real solver", not errors(), json.dumps(errors())[:300])
 finally:
     d.quit()
     print(f"\n{sum(r[1] for r in results)}/{len(results)} passed")

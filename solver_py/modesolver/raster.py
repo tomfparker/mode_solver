@@ -78,22 +78,58 @@ def graded_delta_n(f, X, Y):
     return f["deltaN"] * fx * g
 
 
-def index_fields(project, X, Y):
-    """Principal indices (n_x, n_y, n_z) at the points (X, Y), as complex arrays."""
+def _bbox(f):
+    """Bounding box (x0, x1, y0, y1) of a non-graded shape; infinite in x for full-width layers."""
+    k = f["kind"]
+    if k == "rect":
+        if f.get("fullWidth"):
+            return -np.inf, np.inf, f["y"], f["y"] + f["height"]
+        return f["x"] - f["width"] / 2, f["x"] + f["width"] / 2, f["y"], f["y"] + f["height"]
+    if k == "circle":
+        return f["x"] - f["radius"], f["x"] + f["radius"], f["y"] - f["radius"], f["y"] + f["radius"]
+    if k == "trapezoid":
+        w = max(f["widthBottom"], f["widthTop"])
+        return f["x"] - w / 2, f["x"] + w / 2, f["y"], f["y"] + f["height"]
+    xs = [f["x"] + p[0] for p in f["points"]]
+    ys = [f["y"] + p[1] for p in f["points"]]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def index_fields(project, xs, ys):
+    """Principal indices (n_x, n_y, n_z) on the grid ys × xs (1-D sorted coordinates).
+
+    Arrays are real when every material is lossless, complex otherwise. Each shape is only
+    evaluated inside its own bounding box.
+    """
     lam = project["wavelength"]
     custom = project.get("customMaterials", [])
     bg = project["background"]
-    n = [np.full(X.shape, c, dtype=complex) for c in index_tensor(bg["material"], lam, custom, bg.get("opticAxis") or "z")]
-    for f in project["features"]:
-        if f["kind"] == "graded":
+    shapes = [f for f in project["features"] if f["kind"] != "graded"]
+    tensors = [index_tensor(bg["material"], lam, custom, bg.get("opticAxis") or "z")]
+    tensors += [index_tensor(f["material"], lam, custom, f.get("opticAxis") or "z") for f in shapes]
+    lossless = all(c.imag == 0 for t in tensors for c in t)
+    dtype = float if lossless else complex
+
+    def cast(c):
+        return c.real if lossless else c
+
+    shape = (len(ys), len(xs))
+    n = [np.full(shape, cast(c), dtype=dtype) for c in tensors[0]]
+    for f, tensor in zip(shapes, tensors[1:]):
+        x0, x1, y0, y1 = _bbox(f)
+        i0, i1 = np.searchsorted(xs, x0, "left"), np.searchsorted(xs, x1, "right")
+        j0, j1 = np.searchsorted(ys, y0, "left"), np.searchsorted(ys, y1, "right")
+        if i0 >= i1 or j0 >= j1:
             continue
-        tensor = index_tensor(f["material"], lam, custom, f.get("opticAxis") or "z")
+        X, Y = np.meshgrid(xs[i0:i1], ys[j0:j1])
         mask = shape_mask(f, X, Y)
         dn = f.get("deltaN") or 0.0
         for a in range(3):
-            n[a][mask] = tensor[a] + dn
-    for f in project["features"]:
-        if f["kind"] == "graded":
+            n[a][j0:j1, i0:i1][mask] = cast(tensor[a]) + dn
+    graded = [f for f in project["features"] if f["kind"] == "graded"]
+    if graded:
+        X, Y = np.meshgrid(xs, ys)
+        for f in graded:
             d = graded_delta_n(f, X, Y)
             for a in range(3):
                 n[a] = n[a] + d
@@ -154,11 +190,20 @@ def rasterise(project, xl, yl, supersample=8):
     # to half a cell before the window, hence the extra H.
     xs, wx = _sub_axis(xl, S)
     ys, wy = _sub_axis(yl, S)
-    X, Y = np.meshgrid(xs, ys)
-    n_x, n_y, n_z = index_fields(project, X, Y)
-    e = {"x": n_x**2, "y": n_y**2, "z": n_z**2}
+    n_x, n_y, n_z = index_fields(project, xs, ys)
+    # Isotropic structures share one array, so its box sums are computed once.
+    e = {"z": n_z**2}
+    e["x"] = e["z"] if np.array_equal(n_x, n_z) else n_x**2
+    e["y"] = e["z"] if np.array_equal(n_y, n_z) else (e["x"] if np.array_equal(n_y, n_x) else n_y**2)
     boxes = _Boxes(wx, wy, S, nx, ny)
     ref = e["z"].real
+    inverse = {}
+
+    def inv_of(comp):
+        key = id(e[comp])
+        if key not in inverse:
+            inverse[key] = 1 / e[comp]
+        return inverse[key]
 
     def smooth(comp, ox, oy, normal_axis):
         """Effective ε for the field component `comp` whose box starts at sub-offset (ox, oy)."""
@@ -166,7 +211,7 @@ def rasterise(project, xl, yl, supersample=8):
         mean = boxes.mean(eps, ox, oy)
         if normal_axis is None:
             return mean  # z: always tangential
-        inv = boxes.mean(1 / eps, ox, oy)
+        inv = boxes.mean(inv_of(comp), ox, oy)
         # Interface normal from the gradient of ε across the box (difference of half-box means).
         gx = boxes.mean(ref, ox + H, oy, w=H) - boxes.mean(ref, ox, oy, w=H)
         gy = boxes.mean(ref, ox, oy + H, h=H) - boxes.mean(ref, ox, oy, h=H)
