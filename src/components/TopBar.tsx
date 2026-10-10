@@ -97,6 +97,7 @@ export function TopBar({ status, mock, solving, outOfDate, onSolve, onCancel }: 
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const unit = useStore((s) => s.ui.lengthUnit);
+  const page = useStore((s) => s.ui.page);
   const setUi = useStore((s) => s.setUi);
   const notify = useStore((s) => s.notify);
 
@@ -111,66 +112,77 @@ export function TopBar({ status, mock, solving, outOfDate, onSolve, onCancel }: 
 
   return (
     <header className="topbar">
-      <span className="brand">
-        Mode solver
-      </span>
-      <TextField className="project-name" value={name} ariaLabel="Project name" onCommit={(v) => update((p) => void (p.name = v))} />
-      <WavelengthControl />
-      {solving ? (
-        <button className="btn solve" onClick={onCancel} title="Stop this solve">
-          Cancel
+      <span className="brand">Mode solver</span>
+      <nav className="tabs" aria-label="Pages">
+        <button className={page === 'solver' ? 'on' : ''} onClick={() => setUi({ page: 'solver' })}>
+          Solver
         </button>
-      ) : (
-        <button
-          className={`btn solve${outOfDate ? ' primary attention' : ''}`}
-          onClick={onSolve}
-          title="Run the mode solver on the current structure (Ctrl+Enter)"
-        >
-          ▶ Run
+        <button className={page === 'about' ? 'on' : ''} onClick={() => setUi({ page: 'about' })}>
+          About
         </button>
+      </nav>
+      {page === 'solver' && (
+        <>
+          <TextField className="project-name" value={name} ariaLabel="Project name" onCommit={(v) => update((p) => void (p.name = v))} />
+          <WavelengthControl />
+          {solving ? (
+            <button className="btn solve" onClick={onCancel} title="Stop this solve">
+              Cancel
+            </button>
+          ) : (
+            <button
+              className={`btn solve${outOfDate ? ' primary attention' : ''}`}
+              onClick={onSolve}
+              title="Run the mode solver on the current structure (Ctrl+Enter)"
+            >
+              ▶ Run
+            </button>
+          )}
+          <select
+            className="field"
+            style={{ width: 130 }}
+            value=""
+            aria-label="Start from a template"
+            onChange={(e) => {
+              const t = TEMPLATES.find((x) => x.id === e.target.value);
+              if (t) {
+                replace(t.build(), { keepHistory: true });
+                notify(`Loaded “${t.name}”. Undo (Ctrl+Z) to go back.`);
+              }
+            }}
+          >
+            <option value="" disabled>
+              Templates…
+            </option>
+            {TEMPLATES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.description})
+              </option>
+            ))}
+          </select>
+          <span className="spacer" />
+          <div className="toolbar-group">
+            <button className="btn icon ghost" disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)" aria-label="Undo">
+              ↶
+            </button>
+            <button className="btn icon ghost" disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+              ↷
+            </button>
+          </div>
+          <div className="seg" role="group" aria-label="Length unit">
+            <button className={unit === 'nm' ? 'on' : ''} onClick={() => setUi({ lengthUnit: 'nm' })}>
+              nm
+            </button>
+            <button className={unit === 'um' ? 'on' : ''} onClick={() => setUi({ lengthUnit: 'um' })}>
+              µm
+            </button>
+          </div>
+          <button className="btn primary" onClick={share} title="Copy a link that reproduces this structure">
+            Share link
+          </button>
+        </>
       )}
-      <select
-        className="field"
-        style={{ width: 130 }}
-        value=""
-        aria-label="Start from a template"
-        onChange={(e) => {
-          const t = TEMPLATES.find((x) => x.id === e.target.value);
-          if (t) {
-            replace(t.build(), { keepHistory: true });
-            notify(`Loaded “${t.name}”. Undo (Ctrl+Z) to go back.`);
-          }
-        }}
-      >
-        <option value="" disabled>
-          Templates…
-        </option>
-        {TEMPLATES.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name} ({t.description})
-          </option>
-        ))}
-      </select>
-      <span className="spacer" />
-      <div className="toolbar-group">
-        <button className="btn icon ghost" disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)" aria-label="Undo">
-          ↶
-        </button>
-        <button className="btn icon ghost" disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-          ↷
-        </button>
-      </div>
-      <div className="seg" role="group" aria-label="Length unit">
-        <button className={unit === 'nm' ? 'on' : ''} onClick={() => setUi({ lengthUnit: 'nm' })}>
-          nm
-        </button>
-        <button className={unit === 'um' ? 'on' : ''} onClick={() => setUi({ lengthUnit: 'um' })}>
-          µm
-        </button>
-      </div>
-      <button className="btn primary" onClick={share} title="Copy a link that reproduces this structure">
-        Share link
-      </button>
+      {page === 'about' && <span className="spacer" />}
       <StatusChip status={status} mock={mock} />
     </header>
   );

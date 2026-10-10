@@ -1,6 +1,7 @@
 // Three zones: structure (left) | canvas (centre) | results + coupling (right).
 
 import { useEffect } from 'react';
+import { AboutPage } from '../components/AboutPage';
 import { CanvasView } from '../components/canvas/CanvasView';
 import { ResultsPanel } from '../components/ResultsPanel';
 import { StructurePanel } from '../components/StructurePanel';
@@ -32,6 +33,7 @@ export function App() {
   useUrlSync();
   useShortcuts();
   const project = useStore((s) => s.project);
+  const page = useStore((s) => s.ui.page);
   const { result, outOfDate, solving, solve, cancel, error, status, isMock } = useSolver(project);
   // What the solver is doing right now, if anything (shown on the canvas and in the results header).
   const busy =
@@ -44,9 +46,15 @@ export function App() {
   return (
     <div className="app">
       <TopBar status={status} mock={isMock} solving={solving} outOfDate={outOfDate} onSolve={solve} onCancel={cancel} />
-      <StructurePanel />
-      <CanvasView result={result} stale={outOfDate} busy={busy} />
-      <ResultsPanel result={result} stale={outOfDate} busy={busy} error={error ?? (status.state === 'error' ? status.message : null)} />
+      {page === 'about' ? (
+        <AboutPage />
+      ) : (
+        <>
+          <StructurePanel />
+          <CanvasView result={result} stale={outOfDate} busy={busy} />
+          <ResultsPanel result={result} stale={outOfDate} busy={busy} error={error ?? (status.state === 'error' ? status.message : null)} />
+        </>
+      )}
       <NoticeToast />
     </div>
   );

@@ -139,3 +139,6 @@ Fast / Standard / Fine scale all target cell sizes by 1.4 / 1.0 / 0.7. The old u
 
 ## 2026-10-10 — Mistake recorded: benchmark venv was committed, then removed
 `.venv-bench` (19k files) was swept into a commit by `git add -A`. It was caught before any push; the commit was amended, the directory gitignored, and the objects pruned. Staging is now done with explicit paths.
+
+## 2026-10-10 — About page
+A second top-bar tab ("Solver | About") shows a single minimalist page: what the tool does, how the solver works, what each output means, accuracy and run-time benchmarks, limits, and references. Benchmark numbers are copied from `docs/benchmarks-m2.md` (update both together); the material references are generated from the data files. Solver controls are hidden on the About page. The page is UI state, not part of the shareable project link. Citation details were checked against Crossref; Zhu & Brown is cited by first page only because Crossref lists no end page.

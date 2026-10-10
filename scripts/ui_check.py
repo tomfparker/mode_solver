@@ -210,6 +210,13 @@ try:
     shot("drive-6-ex")
     ok("no JS errors", not errors(), json.dumps(errors())[:300])
 
+    # About page
+    d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='About']").click()
+    about = wait(lambda: d.find_element(By.CSS_SELECTOR, "main.about").text)
+    ok("About page shows method, benchmarks and references", about and all(k in about for k in ("How the solver works", "femwell", "Zhu", "Malitson")))
+    d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='Solver']").click()
+    ok("back to the solver, results still there", wait(lambda: neff0()))
+
     # Real solver, end to end: Pyodide loads, the default SiN strip solves, numbers are physical.
     d.get("about:blank"); d.get(BASE)
     d.execute_script("window.__errs=[]; window.addEventListener('error', e=>window.__errs.push(String(e.message))); window.addEventListener('unhandledrejection', e=>window.__errs.push(String(e.reason)));")

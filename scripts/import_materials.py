@@ -22,6 +22,7 @@ FORMULA = {"formula 1": "sellmeier1", "formula 2": "sellmeier2", "formula 6": "g
 def strip_html(s):
     s = re.sub(r"<sub>(.*?)</sub>", r"\1", s)
     s = re.sub(r"<[^>]+>", "", s)
+    s = re.sub(r"\[[^\]]*\]", "", s)  # bracketed side notes (e.g. links to calculation scripts)
     return " ".join(s.split())
 
 
