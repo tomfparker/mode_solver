@@ -164,7 +164,7 @@ def run_femwell(case, level):
     p, w = case["project"], case["window"]
     lam = p["wavelength"]
     box = shapely.box(w["x0"], w["y0"], w["x1"], w["y1"])
-    polys, index = OrderedDict(), {}
+    polys, index, fine = OrderedDict(), {}, set()
     # femwell gives earlier entries priority; our later shapes are on top, so reverse.
     for i, f in reversed(list(enumerate(p["features"]))):
         n = tensor(f, lam)
@@ -184,6 +184,11 @@ def run_femwell(case, level):
         else:
             raise ValueError(k)
         name = f"s{i}"
+        # Fine mesh on finite shapes only; it grades outwards into full-width layers. (Fine
+        # mesh along whole layers exhausts memory on a 7 GB machine.) A structure with only
+        # layers refines them all.
+        if not f.get("fullWidth"):
+            fine.add(name)
         polys[name] = g.intersection(box)
         index[name] = n[0]
     nbg = tensor(p["background"], lam)
@@ -191,7 +196,9 @@ def run_femwell(case, level):
         return None
     polys["background"] = box
     index["background"] = nbg[0]
-    res = {name: {"resolution": level[0], "distance": 1.0} for name in polys if name != "background"}
+    if not fine:
+        fine = {name for name in polys if name != "background"}
+    res = {name: {"resolution": level[0], "distance": 1.0} for name in polys if name in fine}
     t0 = time.time()
     mesh = from_meshio(mesh_from_OrderedDict(polys, res, default_resolution_max=level[1]))
     basis0 = Basis(mesh, ElementTriP0())

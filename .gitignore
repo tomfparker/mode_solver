@@ -13,3 +13,4 @@ playwright-report/
 .idea
 .DS_Store
 .venv-bench/
+benchmarks/logs/
