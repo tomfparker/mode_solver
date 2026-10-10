@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate } from './dispersion';
 import { LIBRARY, indexAt } from './library';
+import check from '../../solver_py/tests/reference/material_check.json';
 import type { Dispersion } from './types';
 
 const src = { citation: 't', doi: null, url: 'u', file: 'f', retrieved: 'r' };
@@ -73,5 +74,13 @@ describe('material library', () => {
   it('custom materials return the user-entered constant index', () => {
     const c = [{ id: 'custom:a', name: 'A', n: 1.7, k: 0.01 }];
     expect(indexAt('custom:a', 0.5, c)).toEqual({ n: 1.7, k: 0.01, inRange: true });
+  });
+
+  it('agrees with the Python evaluator on every library material (shared check file)', () => {
+    expect(check.values.length).toBeGreaterThanOrEqual(30);
+    for (const v of check.values) {
+      expect(indexAt(v.material, v.lambda, [], 'x', 'x')!.n).toBeCloseTo(v.alongOpticAxis, 12);
+      expect(indexAt(v.material, v.lambda, [], 'y', 'x')!.n).toBeCloseTo(v.acrossOpticAxis, 12);
+    }
   });
 });
