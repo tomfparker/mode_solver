@@ -295,7 +295,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
       </div>
 
       {(solving || stale) && (
-        <div className="updating">{solving ? 'Solving…' : 'Out of date: press Solve (Ctrl+Enter)'}</div>
+        <div className="updating">{solving ? 'Solving…' : 'Out of date: press Run (Ctrl+Enter)'}</div>
       )}
 
       <svg

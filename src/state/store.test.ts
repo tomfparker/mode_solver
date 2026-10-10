@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { anchorY } from '../geometry/geometry';
 import type { RectFeature } from '../geometry/types';
 import { buildTemplate } from '../geometry/templates';
-import { addFeature, deleteLayer, patchFeature, patchLayer, setAnchorKeepPosition, useStore } from './store';
+import { addFeature, deleteLayer, patchFeature, patchLayer, stepInList, useStore } from './store';
 
 beforeEach(() => {
   useStore.getState().replaceProject(buildTemplate('sin-strip'));
@@ -63,12 +63,13 @@ describe('layer-anchored features', () => {
     expect(core().anchor).toBe('substrate');
   });
 
-  it('keep their absolute position when re-anchored', () => {
+  it('move to the next layer down when stepped below their layer in the list', () => {
     const p0 = useStore.getState().project;
-    const abs0 = anchorY(p0, core().anchor) + core().y;
-    setAnchorKeepPosition(core().id, 'substrate');
-    const p1 = useStore.getState().project;
-    expect(anchorY(p1, core().anchor) + core().y).toBeCloseTo(abs0, 9);
+    expect(core().anchor).toBe(p0.stack.layers[0].id);
+    stepInList(`feature:${core().id}`, 1);
+    expect(core().anchor).toBe('substrate');
+    useStore.getState().undo();
+    expect(core().anchor).toBe(p0.stack.layers[0].id);
   });
 });
 

@@ -1,16 +1,20 @@
-// Left zone: layer stack (first), shapes (second), properties of the selection, custom materials.
+// Left zone: one structure list (read top → bottom like the cross-section), properties of
+// the selection, custom materials. Shapes sit on the nearest layer below them in the list;
+// drag rows (or use Move up/down) to restack.
 
+import { useState, type DragEvent } from 'react';
 import { anchorLabel, uid } from '../geometry/geometry';
+import { itemKey, listItems, type ListItem } from '../geometry/stackList';
 import type { Feature, FeatureKind, Layer, MaterialUse, Project } from '../geometry/types';
+import { indexSummary } from '../materials/display';
 import { maxIndexAt, materialInfo } from '../materials/library';
 import {
-  addFeature, addLayer, deleteFeature, deleteLayer, duplicateFeature, moveLayer, patchFeature, patchLayer,
-  reorderFeature, setAnchorKeepPosition, useStore,
+  addFeature, addLayer, deleteFeature, deleteLayer, duplicateFeature, moveInList, patchFeature, patchLayer,
+  stepInList, useStore, type Selection,
 } from '../state/store';
 import { formatLength } from '../state/units';
 import { geoFill } from './geoFill';
 import { MaterialSelect, NumberField, TextField } from './inputs';
-import { indexSummary } from '../materials/display';
 
 const KIND_LABEL: Record<FeatureKind, string> = {
   rect: 'Rectangle',
@@ -29,77 +33,117 @@ function Swatch({ p, use }: { p: Project; use?: MaterialUse }) {
   return <span className="swatch" style={{ background: use ? geoFill(n) : 'repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, transparent 3px 6px)' }} />;
 }
 
+function toSelection(it: ListItem): Selection {
+  return it.type === 'layer' || it.type === 'feature' ? { type: it.type, id: it.id } : { type: it.type };
+}
+
+function isSelected(sel: Selection, it: ListItem): boolean {
+  if (!sel || sel.type !== it.type) return false;
+  return !('id' in it) || (sel as { id: string }).id === it.id;
+}
+
+function Row({ p, it, unit }: { p: Project; it: ListItem; unit: 'nm' | 'um' }) {
+  if (it.type === 'cladding' || it.type === 'substrate') {
+    const use = p.stack[it.type];
+    return (
+      <>
+        <Swatch p={p} use={use} />
+        <span className="name">{it.type === 'cladding' ? 'Cladding' : 'Substrate'} · {materialName(p, use.material)}</span>
+        <span className="meta">∞</span>
+      </>
+    );
+  }
+  if (it.type === 'layer') {
+    const l = p.stack.layers.find((x) => x.id === it.id)!;
+    return (
+      <>
+        <Swatch p={p} use={l} />
+        <span className="name">{l.name} · {materialName(p, l.material)}</span>
+        <span className="meta num">{formatLength(l.thickness, unit)}</span>
+      </>
+    );
+  }
+  const f = p.features.find((x) => x.id === it.id)!;
+  return (
+    <>
+      <Swatch p={p} use={f.kind === 'graded' ? undefined : f} />
+      <span className="name">{f.name}</span>
+      <span className="meta">{f.kind === 'graded' ? `Δn ${f.deltaN}` : materialName(p, f.material)}</span>
+    </>
+  );
+}
+
 export function StructurePanel() {
   const project = useStore((s) => s.project);
   const selection = useStore((s) => s.selection);
   const unit = useStore((s) => s.ui.lengthUnit);
   const select = useStore((s) => s.select);
-  const layersTopDown = [...project.stack.layers].reverse();
+  const items = listItems(project);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>, i: number) => {
+    if (!dragKey) return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    const at = e.clientY < r.top + r.height / 2 ? i : i + 1;
+    setDropAt(Math.min(Math.max(at, 1), items.length - 1));
+  };
+  const endDrag = () => {
+    setDragKey(null);
+    setDropAt(null);
+  };
+
+  const selLayer = selection?.type === 'layer' ? selection.id : undefined;
 
   return (
     <aside className="panel-left" aria-label="Structure">
       <section className="section">
         <div className="section-head">
-          <h2 className="section-title">Layer stack</h2>
-          <button className="btn small" onClick={() => addLayer(selection?.type === 'layer' ? selection.id : undefined)} title="Add a layer above the selected one (or at the top)">
+          <h2 className="section-title">Structure</h2>
+          <button className="btn small" onClick={() => addLayer(selLayer)} title="Add a layer above the selected one (or at the top)">
             + Layer
           </button>
         </div>
-        <div className="rows" role="list">
-          <div
-            role="listitem"
-            className={`row semi${selection?.type === 'cladding' ? ' selected' : ''}`}
-            onClick={() => select({ type: 'cladding' })}
-          >
-            <Swatch p={project} use={project.stack.cladding} />
-            <span className="name">Cladding · {materialName(project, project.stack.cladding.material)}</span>
-            <span className="meta">∞</span>
-          </div>
-          {layersTopDown.map((l) => (
-            <div
-              role="listitem"
-              key={l.id}
-              className={`row${selection?.type === 'layer' && selection.id === l.id ? ' selected' : ''}`}
-              onClick={() => select({ type: 'layer', id: l.id })}
-            >
-              <Swatch p={project} use={l} />
-              <span className="name">
-                {l.name} · {materialName(project, l.material)}
-              </span>
-              <span className="meta num">{formatLength(l.thickness, unit)}</span>
-            </div>
-          ))}
-          <div
-            role="listitem"
-            className={`row semi${selection?.type === 'substrate' ? ' selected' : ''}`}
-            onClick={() => select({ type: 'substrate' })}
-          >
-            <Swatch p={project} use={project.stack.substrate} />
-            <span className="name">Substrate · {materialName(project, project.stack.substrate.material)}</span>
-            <span className="meta">∞</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Shapes</h2>
-        </div>
-        {project.features.length === 0 && <p className="limits">No shapes: the structure is just the layer stack (a slab guide).</p>}
-        <div className="rows" role="list">
-          {[...project.features].reverse().map((f) => (
-            <div
-              role="listitem"
-              key={f.id}
-              className={`row${selection?.type === 'feature' && selection.id === f.id ? ' selected' : ''}`}
-              onClick={() => select({ type: 'feature', id: f.id })}
-              title={`${KIND_LABEL[f.kind]} on ${anchorLabel(project, f.anchor)}`}
-            >
-              <Swatch p={project} use={f.kind === 'graded' ? undefined : f} />
-              <span className="name">{f.name}</span>
-              <span className="meta">{f.kind === 'graded' ? `Δn ${f.deltaN}` : materialName(project, f.material)}</span>
-            </div>
-          ))}
+        <p className="limits" style={{ margin: '0 0 6px' }}>Top to bottom as in the cross-section. Shapes sit on the layer below them; drag to restack.</p>
+        <div className="rows" role="list" onDragLeave={(e) => e.currentTarget === e.target && setDropAt(null)}>
+          {items.map((it, i) => {
+            const key = itemKey(it);
+            const pinned = it.type === 'cladding' || it.type === 'substrate';
+            const f = it.type === 'feature' ? project.features.find((x) => x.id === it.id) : undefined;
+            const cls = [
+              'row',
+              pinned ? 'semi' : '',
+              it.type === 'feature' ? 'shape' : '',
+              isSelected(selection, it) ? 'selected' : '',
+              dragKey === key ? 'dragging' : '',
+              dropAt === i ? 'drop-before' : '',
+            ].join(' ');
+            return (
+              <div
+                role="listitem"
+                key={key}
+                className={cls}
+                draggable={!pinned}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', key);
+                  e.dataTransfer.effectAllowed = 'move';
+                  setDragKey(key);
+                }}
+                onDragOver={(e) => onDragOver(e, i)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragKey && dropAt !== null) moveInList(dragKey, dropAt);
+                  endDrag();
+                }}
+                onDragEnd={endDrag}
+                onClick={() => select(toSelection(it))}
+                title={f ? `${KIND_LABEL[f.kind]} on ${anchorLabel(project, f.anchor)}` : undefined}
+              >
+                <Row p={project} it={it} unit={unit} />
+              </div>
+            );
+          })}
         </div>
         <div className="add-menu">
           {(Object.keys(KIND_LABEL) as FeatureKind[]).map((k) => (
@@ -119,6 +163,19 @@ export function StructurePanel() {
 
       <CustomMaterials />
     </aside>
+  );
+}
+
+function MoveButtons({ itemKeyStr }: { itemKeyStr: string }) {
+  return (
+    <>
+      <button className="btn small" onClick={() => stepInList(itemKeyStr, -1)} title="Move up in the structure list">
+        ↑ Move up
+      </button>
+      <button className="btn small" onClick={() => stepInList(itemKeyStr, 1)} title="Move down in the structure list">
+        ↓ Move down
+      </button>
+    </>
   );
 }
 
@@ -150,7 +207,7 @@ function Properties() {
   if (selection.type === 'layer') {
     const l = project.stack.layers.find((x) => x.id === selection.id);
     if (!l) return null;
-    return <LayerProps l={l} index={project.stack.layers.indexOf(l)} count={project.stack.layers.length} />;
+    return <LayerProps l={l} />;
   }
 
   const f = project.features.find((x) => x.id === selection.id);
@@ -158,7 +215,7 @@ function Properties() {
   return <FeatureProps f={f} />;
 }
 
-function LayerProps({ l, index, count }: { l: Layer; index: number; count: number }) {
+function LayerProps({ l }: { l: Layer }) {
   return (
     <>
       <div className="props">
@@ -170,12 +227,7 @@ function LayerProps({ l, index, count }: { l: Layer; index: number; count: numbe
         <NumberField value={l.thickness} min={0.001} onCommit={(thickness, c) => patchLayer(l.id, { thickness }, c)} ariaLabel="Layer thickness" />
       </div>
       <div className="props-actions">
-        <button className="btn small" disabled={index === count - 1} onClick={() => moveLayer(l.id, 1)}>
-          ↑ Move up
-        </button>
-        <button className="btn small" disabled={index === 0} onClick={() => moveLayer(l.id, -1)}>
-          ↓ Move down
-        </button>
+        <MoveButtons itemKeyStr={`layer:${l.id}`} />
         <button className="btn small" onClick={() => deleteLayer(l.id)}>
           Delete
         </button>
@@ -190,7 +242,7 @@ function LayerProps({ l, index, count }: { l: Layer; index: number; count: numbe
 function AnchorSelect({ f }: { f: Feature }) {
   const project = useStore((s) => s.project);
   return (
-    <select className="field" value={f.anchor} onChange={(e) => setAnchorKeepPosition(f.id, e.target.value)} aria-label="Sits on">
+    <select className="field" value={f.anchor} onChange={(e) => patchFeature(f.id, { anchor: e.target.value })} aria-label="Sits on">
       <option value="substrate">top of substrate (y = 0)</option>
       {project.stack.layers.map((l) => (
         <option key={l.id} value={l.id}>
@@ -295,8 +347,7 @@ function FeatureProps({ f }: { f: Feature }) {
 
       <div className="props-actions">
         <button className="btn small" onClick={() => duplicateFeature(f.id)}>Duplicate</button>
-        <button className="btn small" onClick={() => reorderFeature(f.id, 1)} title="Draw on top of overlapping shapes">Bring forward</button>
-        <button className="btn small" onClick={() => reorderFeature(f.id, -1)}>Send back</button>
+        <MoveButtons itemKeyStr={`feature:${f.id}`} />
         <button className="btn small" onClick={() => deleteFeature(f.id)}>Delete</button>
       </div>
       {f.kind !== 'graded' && (

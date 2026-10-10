@@ -2,7 +2,8 @@
 // Results are derived (see useLiveSolve) and never stored here.
 
 import { create } from 'zustand';
-import { anchorY, structureBox, uid } from '../geometry/geometry';
+import { structureBox, uid } from '../geometry/geometry';
+import { applyList, listItems, moveItem, stepItem } from '../geometry/stackList';
 import { DEFAULT_TEMPLATE_ID, buildTemplate } from '../geometry/templates';
 import type { Feature, FeatureKind, Layer, Project } from '../geometry/types';
 import type { LengthUnit } from './units';
@@ -78,6 +79,7 @@ export const useStore = create<State>((set, get) => ({
     const { project, past, lastEdit } = get();
     const draft = structuredClone(project);
     recipe(draft);
+    normalise(draft);
     const now = Date.now();
     const merge = coalesce !== undefined && lastEdit?.key === coalesce && now - lastEdit.at < COALESCE_MS;
     set({
@@ -89,6 +91,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   replaceProject: (p, opts) => {
+    normalise(p);
     const { project, past } = get();
     set({
       project: p,
@@ -129,6 +132,11 @@ export const useStore = create<State>((set, get) => ({
   notify: (text, tone = 'info') => set({ notice: { id: Date.now(), text, tone } }),
   dismissNotice: () => set({ notice: null }),
 }));
+
+/** Keep feature paint order consistent with the structure list (higher in list = on top). */
+function normalise(p: Project) {
+  applyList(p, listItems(p));
+}
 
 /** Drop a selection whose object no longer exists (after undo/redo/delete). */
 function fixSelection(get: () => State, set: (s: Partial<State>) => void) {
@@ -213,16 +221,6 @@ export function duplicateFeature(id: string) {
   s.select({ type: 'feature', id: copy.id });
 }
 
-/** Move a feature up/down in paint order (later features win where shapes overlap). */
-export function reorderFeature(id: string, dir: -1 | 1) {
-  useStore.getState().update((p) => {
-    const i = p.features.findIndex((f) => f.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= p.features.length) return;
-    [p.features[i], p.features[j]] = [p.features[j], p.features[i]];
-  });
-}
-
 /** Insert a layer above `belowId` (or at the top). */
 export function addLayer(aboveOf?: string) {
   const s = useStore.getState();
@@ -247,23 +245,12 @@ export function deleteLayer(id: string) {
   if (s.selection?.type === 'layer' && s.selection.id === id) s.select(null);
 }
 
-/** Swap a layer with its neighbour. Features keep their anchors (they move with their layer). */
-export function moveLayer(id: string, dir: -1 | 1) {
-  useStore.getState().update((p) => {
-    const i = p.stack.layers.findIndex((l) => l.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= p.stack.layers.length) return;
-    [p.stack.layers[i], p.stack.layers[j]] = [p.stack.layers[j], p.stack.layers[i]];
-  });
+/** Drag-and-drop in the structure list: move item `key` to list position `to`. */
+export function moveInList(key: string, to: number) {
+  useStore.getState().update((p) => applyList(p, moveItem(listItems(p), key, to)));
 }
 
-/** Re-anchor a feature while keeping its absolute position. */
-export function setAnchorKeepPosition(id: string, anchor: string) {
-  useStore.getState().update((p) => {
-    const f = p.features.find((x) => x.id === id);
-    if (!f) return;
-    const abs = anchorY(p, f.anchor) + f.y;
-    f.anchor = anchor;
-    f.y = Math.round((abs - anchorY(p, anchor)) * 1e6) / 1e6;
-  });
+/** Move a list item one step up (−1) or down (+1). */
+export function stepInList(key: string, dir: -1 | 1) {
+  useStore.getState().update((p) => applyList(p, stepItem(listItems(p), key, dir)));
 }

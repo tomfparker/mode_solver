@@ -124,9 +124,9 @@ export function TopBar({ status, mock, solving, outOfDate, onSolve, onCancel }: 
         <button
           className={`btn solve${outOfDate ? ' primary attention' : ''}`}
           onClick={onSolve}
-          title="Solve for the modes of the current structure (Ctrl+Enter)"
+          title="Run the mode solver on the current structure (Ctrl+Enter)"
         >
-          ▶ Solve
+          ▶ Run
         </button>
       )}
       <select

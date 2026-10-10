@@ -121,6 +121,16 @@ try:
     meta = d.find_element(By.XPATH, "//div[@role='listitem'][.//span[contains(text(),'BOX')]]/span[contains(@class,'meta')]").text
     ok("dragging BOX top edge changes its thickness", meta != "4000 nm", meta)
 
+    # Structure list: moving the core down below the BOX makes it sit on the substrate
+    d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
+    d.find_element(By.XPATH, "//button[contains(., 'Move down')]").click()
+    sits = lambda: Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Sits on']")).first_selected_option.text
+    ok("Move down below BOX → sits on substrate", wait(lambda: "substrate" in sits()), sits())
+    order = [e.text.split(" ·")[0] for e in d.find_elements(By.CSS_SELECTOR, "div[role='listitem'] .name")]
+    ok("list order shows Core under BOX", order.index("Core") > order.index("BOX"), " / ".join(order))
+    d.find_element(By.XPATH, "//button[contains(., 'Move up')]").click()
+    ok("Move up → back on BOX", wait(lambda: "BOX" in sits()), sits())
+
     # Wavelength chip 780 → Si out-of-range warning (substrate Si)
     wl = d.find_element(By.ID, "wavelength")
     wl.send_keys(Keys.CONTROL, "a"); wl.send_keys("780", Keys.ENTER)
@@ -157,8 +167,8 @@ try:
     h = hash_()
     time.sleep(0.6); h = hash_()
     d.get("about:blank"); d.get(URL + h)
-    ok("reload from URL restores project (5+ shapes)", wait(lambda: len(d.find_elements(By.XPATH, "//section[.//h2[text()='Shapes']]//div[@role='listitem']")) >= 6),
-       str(len(d.find_elements(By.XPATH, "//section[.//h2[text()='Shapes']]//div[@role='listitem']"))))
+    ok("reload from URL restores project (5+ shapes)", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, ".row.shape")) >= 6),
+       str(len(d.find_elements(By.CSS_SELECTOR, ".row.shape"))))
 
     # Broken link
     d.get("about:blank"); d.get(URL + "#p=garbage")

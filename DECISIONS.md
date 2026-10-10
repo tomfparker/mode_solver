@@ -86,3 +86,9 @@ The wavelength field stays prominent; arrow keys step 1 nm (Shift: 10 nm).
 
 ## 2026-10-10 — Simulation window labelled on the canvas
 The dashed rectangle is now labelled "Simulation window", with a tooltip explaining that its edges act as walls and where to resize it. The maintainer couldn't tell what it was.
+
+## 2026-10-10 — Maintainer: one structure list instead of separate layer stack and shapes (option A)
+A single list read top → bottom like the cross-section: cladding, then each layer preceded by the shapes sitting on it, then substrate. The list is the single source of truth (`src/geometry/stackList.ts`): reading bottom-up, a shape sits on the nearest layer below it, and higher in the list = painted later (wins overlaps). Dragging a row or using Move up/down rewrites layer order, anchors and paint order together. A layer moves with the shapes sitting on it. The store normalises feature order to the list after every edit. Changing "Sits on" now keeps the shape's offset (it moves onto the new surface) instead of its absolute position, matching list moves. "Bring forward / Send back" were replaced by Move up/down. Supersedes UI principle 2's "layer stack first, shapes second" panel split; the layer-first model itself is unchanged.
+
+## 2026-10-10 — Solve button labelled "Run"
+The maintainer calls it a run button.
