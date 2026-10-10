@@ -4,6 +4,7 @@
 import { useMemo } from 'react';
 import { labelModes } from '../analysis/modeLabels';
 import { computeWarnings, type Warning } from '../analysis/warnings';
+import { SOLVER_KIND_LABELS } from '../solver/kinds';
 import { fmtArea, fmtIndex, fmtMfd, fmtPercent, fmtWavelengthNm } from '../state/format';
 import { useStore } from '../state/store';
 import type { ModeResult, SolveResult } from '../solver/types';
@@ -13,11 +14,12 @@ import { usePrefersDark } from './usePrefersDark';
 interface Props {
   result: SolveResult | null;
   stale: boolean;
-  solving: boolean;
+  /** What the solver is doing (loading, solving), or null when idle. */
+  busy: string | null;
   error: string | null;
 }
 
-export function ResultsPanel({ result, stale, solving, error }: Props) {
+export function ResultsPanel({ result, stale, busy, error }: Props) {
   const project = useStore((s) => s.project);
   const selected = useStore((s) => s.ui.selectedMode);
   const setUi = useStore((s) => s.setUi);
@@ -31,7 +33,7 @@ export function ResultsPanel({ result, stale, solving, error }: Props) {
       <section className="section">
         <div className="section-head">
           <h2 className="section-title">Modes at {fmtWavelengthNm(project.wavelength)}</h2>
-          <span className="results-status">{error ? 'Solver error' : solving ? 'Solving…' : stale ? 'Out of date' : result ? (result.isMock ? 'Preview (mock)' : 'Up to date') : 'Not solved yet'}</span>
+          <span className="results-status">{error ? 'Solver error' : busy ? (busy.startsWith('Loading') ? 'Loading solver…' : 'Solving…') : stale ? 'Out of date' : result ? (result.isMock ? 'Preview (mock)' : 'Up to date') : 'Not solved yet'}</span>
         </div>
         {error && <div className="warning"><span className="icon">!</span><span>{error}</span></div>}
         {m && (
@@ -90,7 +92,11 @@ export function ResultsPanel({ result, stale, solving, error }: Props) {
               ))}
             </tbody>
           </table>
-          <p className="limits" style={{ marginTop: 6 }}>MFD and A_eff in µm / µm². n_g arrives with wavelength sweeps.</p>
+          <p className="limits" style={{ marginTop: 6 }}>
+            MFD: 1/e² intensity width through the peak, µm. A_eff in µm². n_g arrives with wavelength sweeps.
+            {result.modes.some((x) => !x.guided) && ' ✕ = not guided (below cut-off, or a mode of the window walls).'}
+          </p>
+          {!result.isMock && <SolveInfo result={result} />}
         </section>
       )}
 
@@ -103,10 +109,22 @@ export function ResultsPanel({ result, stale, solving, error }: Props) {
       </section>
 
       <section className="section limits">
-        <p><b>Quick-estimate tool.</b> Target accuracy once the real solver lands: n_eff within ~1e-3, mode size within ~10%.</p>
+        <p><b>Quick-estimate tool.</b> Target accuracy: n_eff within ~1e-3, mode size within ~10% (checked against femwell and Tidy3D on standard strips).</p>
         <p>Not modelled: bends, 3D propagation (tapers, EME/FDTD), real lens aberrations, design-grade accuracy.</p>
       </section>
     </aside>
+  );
+}
+
+function SolveInfo({ result }: { result: SolveResult }) {
+  const d = result.diagnostics;
+  const ms = d.timingsMs.python ?? d.timingsMs.total;
+  return (
+    <p className="limits">
+      {SOLVER_KIND_LABELS[d.solverKind]} solver
+      {d.mesh && ` · mesh ${d.mesh.nx} × ${d.mesh.ny} cells (smallest ${Math.round(d.mesh.minCell * 1000)} nm)`}
+      {ms !== undefined && ` · ${ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`}`}
+    </p>
   );
 }
 

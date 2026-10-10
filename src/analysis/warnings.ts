@@ -84,7 +84,18 @@ export function computeWarnings(p: Project, result: SolveResult | null): Warning
   if (!result) return out;
 
   const guided = result.modes.filter((m) => m.guided);
-  if (guided.length === 0) {
+  const wallModes = result.modes.filter((m) => !m.guided && m.boundaryAmplitude > BOUNDARY_THRESHOLD).length;
+  if (!result.isMock && wallModes > 0) {
+    out.push({
+      id: 'wall-modes',
+      tone: 'warn',
+      text:
+        `${wallModes} of the ${result.modes.length} modes found live against the window walls (marked ✕), not in your waveguide. ` +
+        'This happens when the window cuts through a high-index region such as a substrate or slab. ' +
+        (guided.length === 0 ? 'Shrink the window so it stops short of that region, then run again.' : 'Raise “Modes” to find more guided ones, or shrink the window.'),
+    });
+  }
+  if (guided.length === 0 && !(wallModes > 0 && !result.isMock)) {
     out.push({
       id: 'no-guided',
       tone: 'warn',

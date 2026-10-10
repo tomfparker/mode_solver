@@ -33,13 +33,20 @@ export function App() {
   useShortcuts();
   const project = useStore((s) => s.project);
   const { result, outOfDate, solving, solve, cancel, error, status, isMock } = useSolver(project);
+  // What the solver is doing right now, if anything (shown on the canvas and in the results header).
+  const busy =
+    status.state === 'loading'
+      ? `Loading solver: ${status.stage.toLowerCase()} (${Math.round(status.progress * 100)}%). First visit downloads ~30 MB.`
+      : solving
+        ? 'Solving…'
+        : null;
 
   return (
     <div className="app">
       <TopBar status={status} mock={isMock} solving={solving} outOfDate={outOfDate} onSolve={solve} onCancel={cancel} />
       <StructurePanel />
-      <CanvasView result={result} stale={outOfDate} solving={solving} />
-      <ResultsPanel result={result} stale={outOfDate} solving={solving} error={error} />
+      <CanvasView result={result} stale={outOfDate} busy={busy} />
+      <ResultsPanel result={result} stale={outOfDate} busy={busy} error={error ?? (status.state === 'error' ? status.message : null)} />
       <NoticeToast />
     </div>
   );

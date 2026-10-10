@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { solveDomain } from '../geometry/geometry';
 import { buildTemplate, TEMPLATES } from '../geometry/templates';
 import { MockSolver, mockSolve } from './mockSolver';
 import { isAbortError, type SolveRequest } from './types';
 
 const ETA0 = 376.730313668;
 const project = buildTemplate('sin-strip');
-const req = (id: string, p = project): SolveRequest => ({ id, project: p, numModes: 4 });
+const req = (id: string, p = project, numModes = 4): SolveRequest => ({ id, project: p, window: solveDomain(p), numModes });
 
 describe('mockSolve', () => {
   const res = mockSolve(req('a'));
@@ -74,8 +75,8 @@ describe('mockSolve', () => {
     Object.assign(small.features.find((f) => f.name === 'Core')!, { width: 0.6, height: 0.4 });
     big.settings.numModes = 12;
     small.settings.numModes = 12;
-    const nb = mockSolve({ id: 'b', project: big, numModes: 12 }).modes.filter((m) => m.guided).length;
-    const ns = mockSolve({ id: 's', project: small, numModes: 12 }).modes.filter((m) => m.guided).length;
+    const nb = mockSolve(req('b', big, 12)).modes.filter((m) => m.guided).length;
+    const ns = mockSolve(req('s', small, 12)).modes.filter((m) => m.guided).length;
     expect(nb).toBeGreaterThan(ns);
   });
 });

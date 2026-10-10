@@ -1,9 +1,10 @@
 // App-level hooks: live solving, URL sync, keyboard shortcuts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { uid } from '../geometry/geometry';
+import { solveDomain, uid } from '../geometry/geometry';
 import type { Project } from '../geometry/types';
 import { MockSolver } from '../solver/mockSolver';
+import { PyodideSolver } from '../solver/workerClient';
 import { isAbortError, type Solver, type SolveResult, type SolverStatus } from '../solver/types';
 import { deleteFeature, patchFeature, useStore } from '../state/store';
 import { decodeHash, encodeProject } from '../state/url';
@@ -13,8 +14,23 @@ import { decodeHash, encodeProject } from '../state/url';
  * rather than re-solving. A new project (first load, template, shared link) solves by itself
  * so the canvas is never blank.
  */
+let solverInstance: Solver | null = null;
+
+/**
+ * The page's solver: the real (Pyodide) one, or the mock with `?solver=mock` in the URL (for
+ * UI work and demos). Created once and kept for the page's lifetime: loading Pyodide takes
+ * seconds, and React StrictMode re-runs effects, so it must not be tied to a component.
+ */
+function getSolver(): Solver {
+  if (!solverInstance) {
+    const mock = typeof location !== 'undefined' && new URLSearchParams(location.search).get('solver') === 'mock';
+    solverInstance = mock ? new MockSolver() : new PyodideSolver();
+  }
+  return solverInstance;
+}
+
 export function useSolver(project: Project) {
-  const solver: Solver = useMemo(() => new MockSolver(), []);
+  const solver = getSolver();
   const [status, setStatus] = useState<SolverStatus>(solver.status());
   const [state, setState] = useState<{ result: SolveResult; key: string } | null>(null);
   const [solving, setSolving] = useState(false);
@@ -24,7 +40,6 @@ export function useSolver(project: Project) {
   const viewEpoch = useStore((s) => s.viewEpoch);
 
   useEffect(() => solver.onStatus(setStatus), [solver]);
-  useEffect(() => () => solver.dispose(), [solver]);
 
   const solve = useCallback(() => {
     running.current?.abort();
@@ -35,7 +50,17 @@ export function useSolver(project: Project) {
     setSolving(true);
     setError(null);
     solver
-      .solve({ id: uid('solve'), project: p, numModes: p.settings.numModes }, ac.signal)
+      .solve(
+        {
+          id: uid('solve'),
+          project: p,
+          window: solveDomain(p),
+          meshQuality: p.settings.meshQuality,
+          numModes: p.settings.numModes,
+          nGuess: p.settings.nGuess === 'auto' ? undefined : p.settings.nGuess,
+        },
+        ac.signal,
+      )
       .then(
         (result) => setState({ result, key: k }),
         (e) => {

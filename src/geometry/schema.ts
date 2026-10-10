@@ -59,6 +59,7 @@ export const projectSchema = z.object({
         .refine((b) => b.x1 > b.x0 && b.y1 > b.y0, 'window must have positive width and height'),
     ).optional(),
     solverKind: auto(z.enum(['scalar', 'semivector-te', 'semivector-tm', 'fullvector'])),
+    meshQuality: z.enum(['fast', 'standard', 'fine']).optional(),
     meshStep: auto(positive),
     padding: auto(positive),
     boundary: auto(z.enum(['pec', 'pmc'])),

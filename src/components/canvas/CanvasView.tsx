@@ -43,7 +43,7 @@ function matName(p: Project, id: string) {
   return materialInfo(id, p.customMaterials)?.name ?? id;
 }
 
-export function CanvasView({ result, stale, solving }: { result: SolveResult | null; stale: boolean; solving: boolean }) {
+export function CanvasView({ result, stale, busy }: { result: SolveResult | null; stale: boolean; busy: string | null }) {
   const project = useStore((s) => s.project);
   const selection = useStore((s) => s.selection);
   const ui = useStore((s) => s.ui);
@@ -271,7 +271,7 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
   return (
     <div className="canvas-zone" ref={wrap}>
       {result?.isMock && (
-        <div className="mock-banner" role="status" title="The real finite-difference solver arrives in the next milestone. Geometry and refractive indices are already real.">
+        <div className="mock-banner" role="status" title="Mock solver (?solver=mock in the URL). Geometry and refractive indices are real; modes are not.">
           Preview: modes are <b>simulated placeholders</b>, not physical results
         </div>
       )}
@@ -303,8 +303,8 @@ export function CanvasView({ result, stale, solving }: { result: SolveResult | n
         <button className="btn icon" title="Fit to window (F)" onClick={fit}>⤢</button>
       </div>
 
-      {(solving || stale) && (
-        <div className="updating">{solving ? 'Solving…' : 'Out of date: press Run (Ctrl+Enter)'}</div>
+      {(busy || stale) && (
+        <div className="updating">{busy ?? 'Out of date: press Run (Ctrl+Enter)'}</div>
       )}
 
       <svg

@@ -3,7 +3,7 @@
 import { LatestWins } from './latestWins';
 import type { FromWorker, ToWorker } from './protocol';
 import { PYODIDE_BASE } from './pyodideConfig';
-import type { Solver, SolveRequest, SolveResult, SolverStatus } from './types';
+import { abortError, type Solver, type SolveRequest, type SolveResult, type SolverStatus } from './types';
 
 interface Waiter {
   resolve: (r: SolveResult) => void;
@@ -66,7 +66,21 @@ export class PyodideSolver implements Solver {
     this.listeners.clear();
   }
 
-  private exec(req: SolveRequest, signal: AbortSignal): Promise<SolveResult> {
+  /** Resolves once the Python runtime is loaded (rejects if loading failed). */
+  private whenReady(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const off = this.onStatus((s) => {
+        if (s.state === 'ready') resolve();
+        else if (s.state === 'error') reject(new Error(s.message));
+        else return;
+        queueMicrotask(() => off());
+      });
+    });
+  }
+
+  private async exec(req: SolveRequest, signal: AbortSignal): Promise<SolveResult> {
+    await this.whenReady();
+    if (signal.aborted) throw abortError();
     return new Promise((resolve, reject) => {
       this.waiters.set(req.id, { resolve, reject });
       signal.addEventListener(

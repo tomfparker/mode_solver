@@ -98,6 +98,9 @@ export interface WindowBox {
   y1: number;
 }
 
+/** Mesh presets: 'fast' has ~half the cells of 'standard', 'fine' about twice as many. */
+export type MeshQuality = 'fast' | 'standard' | 'fine';
+
 export interface SolverSettings {
   /**
    * Simulation window. A fixed box stays put while shapes are edited; 'auto' resizes it to the
@@ -105,7 +108,9 @@ export interface SolverSettings {
    */
   window?: Auto<WindowBox>;
   solverKind: Auto<SolverKind>;
-  /** Grid step, µm. Auto: ~100 cells along the longer side of the domain. */
+  /** Mesh preset for the real solver (graded mesh). Absent means 'standard'. */
+  meshQuality?: MeshQuality;
+  /** Legacy uniform grid step, µm (used by the mock solver only). */
   meshStep: Auto<number>;
   /** Auto-sized window only: space between the structure and the window edge, µm. Auto grows with λ. */
   padding: Auto<number>;

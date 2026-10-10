@@ -104,4 +104,13 @@ describe('simulation window', () => {
     p.settings.window = { x0: 1, x1: 0, y0: 0, y1: 1 };
     expect(decodeHash('#p=' + compressToEncodedURIComponent(JSON.stringify(p))).ok).toBe(false);
   });
+
+  it('auto-sizing stops at a far high-index substrate, but not at a slab the core sits on', () => {
+    const soi = buildTemplate('soi-strip'); // substrate top at −2 µm, padding would reach −2.3
+    expect(autoDomain(soi).y0).toBe(-2);
+    const ridge = buildTemplate('ln-ridge'); // LN slab directly under the ridge must stay inside
+    expect(autoDomain(ridge).y0).toBeLessThan(-0.3);
+    const sin = buildTemplate('sin-strip'); // substrate at −4 µm is beyond the padding anyway
+    expect(autoDomain(sin).y0).toBeGreaterThan(-4);
+  });
 });

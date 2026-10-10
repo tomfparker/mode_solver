@@ -2,7 +2,7 @@
 // It must stay swappable for a future Rust→WASM backend. If it changes, update the mock
 // solver and the worker together (CLAUDE.md).
 
-import type { Project } from '../geometry/types';
+import type { MeshQuality, Project, WindowBox } from '../geometry/types';
 import type { SolverKind } from './kinds';
 
 export type FieldComponent = 'Ex' | 'Ey' | 'Ez' | 'Hx' | 'Hy' | 'Hz';
@@ -34,14 +34,19 @@ export interface ModeResult {
   fields: Partial<Record<FieldComponent, ComplexField>>;
   /** Peak |E|² within the outer boundary cells relative to the global peak (0..1). Drives the boundary warning. */
   boundaryAmplitude: number;
-  /** False for modes at or below cut-off (radiating into the surroundings). */
+  /** False for modes at or below cut-off, or living against the window walls (e.g. in a substrate slice). */
   guided: boolean;
+  /** Second-moment (D4σ) diameters, µm: equal to `mfd` for a Gaussian. */
+  mfdD4s?: { x: number; y: number };
 }
 
 export interface SolveRequest {
   /** Unique per request. Used for latest-wins bookkeeping and stale-result detection. */
   id: string;
   project: Project;
+  /** Simulation window (resolved by the caller: fixed, or auto-sized to the structure). */
+  window: WindowBox;
+  meshQuality?: MeshQuality;
   numModes: number;
   /** Shift guess. Default: max index in the domain. Sweeps pass the previous mode's n_eff. */
   nGuess?: number;
@@ -57,6 +62,8 @@ export interface SolveResult {
     solverKind: SolverKind;
     timingsMs: Record<string, number>;
     notes: string[];
+    /** Solver mesh actually used (cells, and the smallest cell size in µm). */
+    mesh?: { nx: number; ny: number; minCell: number };
   };
   /** True when the numbers are not physical (mock solver). The UI must say so. */
   isMock: boolean;

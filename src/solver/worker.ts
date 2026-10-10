@@ -4,6 +4,7 @@
 
 import type { PyodideAPI } from 'pyodide';
 import type { FromWorker, ToWorker } from './protocol';
+import type { SolveRequest, SolveResult } from './types';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -14,7 +15,14 @@ const pySources = import.meta.glob(['../../solver_py/**/*.py', '!../../solver_py
   eager: true,
 }) as Record<string, string>;
 
+// Material data, placed at the same path relative to solver_py as in the repository.
+const materialFiles = import.meta.glob('../../data/materials/*.json', { query: '?raw', import: 'default', eager: true }) as Record<
+  string,
+  string
+>;
+
 const PY_ROOT = '/home/pyodide/solver_py';
+const DATA_ROOT = '/home/pyodide/data/materials';
 
 let pyodide: PyodideAPI | null = null;
 let loadMs = 0;
@@ -42,7 +50,11 @@ async function init(base: string, interruptBuffer?: SharedArrayBuffer) {
       py.FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
       py.FS.writeFile(full, src);
     }
-    py.runPython(`import sys; sys.path.insert(0, "${PY_ROOT}")`);
+    py.FS.mkdirTree(DATA_ROOT);
+    for (const [path, src] of Object.entries(materialFiles)) {
+      py.FS.writeFile(`${DATA_ROOT}/${path.slice(path.lastIndexOf('/') + 1)}`, src);
+    }
+    py.runPython(`import sys; sys.path.insert(0, "${PY_ROOT}")\nimport modesolver.ui`);
     if (interruptBuffer) py.setInterruptBuffer(new Int32Array(interruptBuffer));
     pyodide = py;
     loadMs = performance.now() - t0;
@@ -73,6 +85,49 @@ json.dumps(run_spike(tuple(_sizes), tuple(_kinds), _repeats))
   post({ type: 'spikeDone', id, json, transferMs, loadMs }, [f32.buffer]);
 }
 
+/** Collect every typed array's buffer so the result moves to the main thread without copying. */
+function buffersOf(v: unknown, out: ArrayBuffer[] = []): ArrayBuffer[] {
+  if (ArrayBuffer.isView(v)) out.push(v.buffer as ArrayBuffer);
+  else if (Array.isArray(v)) v.forEach((x) => buffersOf(x, out));
+  else if (v && typeof v === 'object') Object.values(v).forEach((x) => buffersOf(x, out));
+  return out;
+}
+
+function runSolve(req: SolveRequest) {
+  const py = pyodide!;
+  const t0 = performance.now();
+  try {
+    py.globals.set('_request_json', JSON.stringify(req));
+    const proxy = py.runPython('modesolver.ui.solve_request(_request_json)');
+    const t1 = performance.now();
+    // numpy arrays arrive as typed-array views into WASM memory; slice() copies them out
+    // so they can be transferred.
+    const raw = proxy.toJs({ dict_converter: Object.fromEntries, create_proxies: false });
+    proxy.destroy();
+    const result = detach(raw) as SolveResult;
+    result.diagnostics.timingsMs.python = t1 - t0;
+    result.diagnostics.timingsMs.transfer = performance.now() - t1;
+    post({ type: 'solved', result }, buffersOf(result));
+  } catch (e) {
+    const message = String(e);
+    post({ type: 'solveError', requestId: req.id, message: shortError(message), interrupted: message.includes('KeyboardInterrupt') });
+  }
+}
+
+/** Deep-copy typed arrays out of WASM memory (plain values pass through). */
+function detach(v: unknown): unknown {
+  if (ArrayBuffer.isView(v)) return (v as Float32Array).slice();
+  if (Array.isArray(v)) return v.map(detach);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, detach(x)]));
+  return v;
+}
+
+/** Last line of a Python traceback: the part worth showing to a user. */
+function shortError(message: string): string {
+  const lines = message.trim().split('\n');
+  return lines[lines.length - 1] || message;
+}
+
 self.onmessage = async (ev: MessageEvent<ToWorker>) => {
   const msg = ev.data;
   switch (msg.type) {
@@ -83,13 +138,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       runSpike(msg.id, msg.sizes, msg.kinds, msg.repeats);
       break;
     case 'solve':
-      // Real solver arrives in M2.
-      post({
-        type: 'solveError',
-        requestId: msg.req.id,
-        message: 'Real solver not implemented yet (M2). Use the mock solver.',
-        interrupted: false,
-      });
+      runSolve(msg.req);
       break;
   }
 };

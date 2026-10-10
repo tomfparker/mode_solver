@@ -1,8 +1,8 @@
 // Left-panel "Simulation" section: the simulation window (fixed by default, or auto-sized to
 // the structure) and solver options.
 
-import { autoDomain, effectiveMeshStep, effectivePadding, isAutoWindow, maxIndex, solveDomain } from '../geometry/geometry';
-import type { Auto, SolverSettings, WindowBox } from '../geometry/types';
+import { autoDomain, effectivePadding, isAutoWindow, maxIndex, solveDomain } from '../geometry/geometry';
+import type { Auto, MeshQuality, SolverSettings, WindowBox } from '../geometry/types';
 import { SOLVER_KIND_LABELS, type SolverKind } from '../solver/kinds';
 import { useStore } from '../state/store';
 import { NumberField } from './inputs';
@@ -48,9 +48,6 @@ export function SimulationPanel() {
   const h = d.y1 - d.y0;
   const cx = (d.x0 + d.x1) / 2;
   const cy = (d.y0 + d.y1) / 2;
-  const step = effectiveMeshStep(project);
-  const nx = Math.round(w / step);
-  const ny = Math.round(h / step);
 
   /** Rewrite the fixed window from centre and size. */
   const setBox = (c: { cx?: number; cy?: number; w?: number; h?: number }, coalesce?: string) => {
@@ -119,17 +116,14 @@ export function SimulationPanel() {
               </option>
             ))}
           </select>
-          <AutoNumber label="Mesh step" value={st.meshStep} effective={step} min={0.001} onChange={(v) => set('meshStep', v)} title="Grid spacing. Auto: ~100 cells along the longer side." />
-          <span className="hint">
-            Grid {nx} × {ny} cells
-            {nx * ny > 40000 ? ': large grids are slow in the browser' : ''}
-          </span>
-          <label>Boundary</label>
-          <select className="field" value={st.boundary} onChange={(e) => set('boundary', e.target.value as Auto<'pec' | 'pmc'>)}>
-            <option value="auto">Auto</option>
-            <option value="pec">PEC (metal walls)</option>
-            <option value="pmc">PMC</option>
+          <label title="The mesh is finest in and around the shapes and coarser towards the window edges">Mesh</label>
+          <select className="field" value={st.meshQuality ?? 'standard'} onChange={(e) => set('meshQuality', e.target.value as MeshQuality)} aria-label="Mesh quality">
+            <option value="fast">Fast (coarser, ~2× quicker)</option>
+            <option value="standard">Standard</option>
+            <option value="fine">Fine (slower, more accurate)</option>
           </select>
+          <label>Boundary</label>
+          <span className="limits" title="Absorbing (PML) boundaries are planned">Metal walls at the window edges</span>
           <AutoNumber
             label="n guess"
             kind="plain"

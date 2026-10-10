@@ -66,12 +66,12 @@ function WavelengthControl() {
 function StatusChip({ status, mock }: { status: SolverStatus; mock: boolean }) {
   if (mock) {
     return (
-      <span className="status-chip mock" title="The real finite-difference solver arrives in the next milestone. Results are placeholders.">
+      <span className="status-chip mock" title="Mock solver (?solver=mock): results are placeholders, not physical. Remove it from the URL for the real solver.">
         <span className="dot" /> Mock solver
       </span>
     );
   }
-  const text = status.state === 'loading' ? `${status.stage} ${Math.round(status.progress * 100)}%` : status.state === 'ready' ? 'Solver ready' : 'Solver error';
+  const text = status.state === 'loading' ? `Loading solver ${Math.round(status.progress * 100)}%` : status.state === 'ready' ? 'Solver ready' : 'Solver error';
   return (
     <span className="status-chip">
       <span className="dot" /> {text}

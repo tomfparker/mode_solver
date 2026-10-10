@@ -100,12 +100,30 @@ export function effectivePadding(p: Project): number {
   return Math.max(1.0, 1.5 * p.wavelength, 0.75 * size);
 }
 
-/** Window sized to the structure plus padding (what "auto-size" gives, and "Fit to structure" sets). */
+/**
+ * Window sized to the structure plus padding (what "auto-size" gives, and "Fit to structure" sets).
+ *
+ * The window stops at the surface of any full-width layer that is separated from the structure
+ * and has a higher index than the material next to it (typically a silicon substrate under the
+ * BOX). Including a slice of such a layer would add spurious modes trapped in that slice, with
+ * higher n_eff than the waveguide mode.
+ */
 export function autoDomain(p: Project): Box {
   const b = structureBox(p);
   const pad = effectivePadding(p);
+  let y0 = b.y0 - pad;
+  let y1 = b.y1 + pad;
+  const cx = (b.x0 + b.x1) / 2;
+  const gap = 1e-6;
+  for (const f of p.features) {
+    if (!isFullWidth(f)) continue;
+    const n = maxIndexAt(f.material, p.wavelength, p.customMaterials) + (f.deltaN ?? 0);
+    const top = f.y + f.height;
+    if (top < b.y0 - gap && top > y0 && n > indexAtPoint(p, cx, top + gap) + 0.05) y0 = top;
+    if (f.y > b.y1 + gap && f.y < y1 && n > indexAtPoint(p, cx, f.y - gap) + 0.05) y1 = f.y;
+  }
   const r = (v: number) => Math.round(v * 1000) / 1000;
-  return { x0: r(b.x0 - pad), x1: r(b.x1 + pad), y0: r(b.y0 - pad), y1: r(b.y1 + pad) };
+  return { x0: r(b.x0 - pad), x1: r(b.x1 + pad), y0: r(y0), y1: r(y1) };
 }
 
 export function isAutoWindow(p: Project): boolean {
