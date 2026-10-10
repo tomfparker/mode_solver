@@ -13,5 +13,5 @@ test = ["pytest"]
 dev = ["selenium", "pyyaml"]
 
 [tool.pytest.ini_options]
-pythonpath = ["solver_py"]
+pythonpath = ["solver_py", "solver_py/tests"]
 testpaths = ["solver_py/tests"]
