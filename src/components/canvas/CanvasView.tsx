@@ -11,7 +11,7 @@ import { formatLength } from '../../state/units';
 import type { SolveResult } from '../../solver/types';
 import { geoFill } from '../geoFill';
 import { usePrefersDark } from '../usePrefersDark';
-import { e2Contour, fieldData, fieldDataUrl } from './fieldImage';
+import { e2Contour, fieldData, fieldDataUrl, profiles } from './fieldImage';
 import { ShapeEditor } from '../ShapeEditor';
 import { applyDrag, handlesFor, snapTargets, type SnapContext } from './handles';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt, type Size, type View } from './view';
@@ -24,6 +24,8 @@ type Drag =
   | { type: 'pan'; px: number; py: number; view: View; moved: boolean };
 
 const CLICK_SLOP = 3; // px of movement before a press becomes a drag
+const PROFILE_PX = 72; // height of the profile strips
+const PROFILE_BASE = 44; // bottom strip's baseline above the canvas edge (clear of scale bar and readout)
 
 const FIELD_VIEWS: { id: FieldView; label: string }[] = [
   { id: 'E2', label: '|E|²' },
@@ -51,6 +53,7 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
   const select = useStore((s) => s.select);
   const setUi = useStore((s) => s.setUi);
   const [dragging, setDragging] = useState(false);
+  const showProfiles = ui.showProfiles;
 
   const wrap = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -74,8 +77,19 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
 
   const fit = useCallback(() => {
     userAdjusted.current = false;
-    setView(fitView(domain, size, 48));
-  }, [domain, size]);
+    if (!showProfiles) return setView(fitView(domain, size, 48));
+    // Leave room for the profile strips along the left and bottom edges.
+    const left = PROFILE_PX + 6;
+    const bottom = PROFILE_PX + PROFILE_BASE;
+    const v = fitView(domain, { w: size.w - left, h: size.h - bottom }, 48);
+    setView({ ...v, cx: v.cx - left / 2 / v.scale, cy: v.cy - bottom / 2 / v.scale });
+  }, [domain, size, showProfiles]);
+
+  // Re-fit when the strips appear or disappear, unless the user has set their own view.
+  useEffect(() => {
+    if (view && !userAdjusted.current) fit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showProfiles]);
 
   // Re-fit when the window no longer fits on screen (e.g. a shape was added), unless the user
   // has set their own view. Never during a drag: the view must not move under the pointer.
@@ -129,6 +143,10 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
     return { url: fieldDataUrl(d, result.grid, undefined, dark), part: d.part };
   }, [result, mode, ui.fieldView, dark]);
   const contour = useMemo(() => (result && mode ? e2Contour(mode, result.grid) : []), [result, mode]);
+  const prof = useMemo(
+    () => (ui.showProfiles && result && mode ? profiles(mode, result.grid, ui.fieldView) : null),
+    [ui.showProfiles, result, mode, ui.fieldView],
+  );
 
   if (!view) return <div className="canvas-zone" ref={wrap}><svg ref={svgRef} /></div>;
 
@@ -295,6 +313,18 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
         <label className="line">
           <input type="checkbox" checked={ui.showContour} onChange={(e) => setUi({ showContour: e.target.checked })} /> 1/e² contour
         </label>
+        <label className="line" title="Field integrated across each axis (filled), and the cut through the peak (dashed), along the canvas edges">
+          <input type="checkbox" checked={ui.showProfiles} onChange={(e) => setUi({ showProfiles: e.target.checked })} /> Profiles
+        </label>
+        {ui.showProfiles && (
+          <div className="profile-key">
+            {ui.fieldView === 'E2' ? '|E|²' : `|${ui.fieldView}|²`}, normalised
+            <br />
+            <span className="key-solid" /> integrated across the other axis
+            <br />
+            <span className="key-dashed" /> cut through the peak
+          </div>
+        )}
       </div>
 
       <div className="zoom-tools">
@@ -402,6 +432,31 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
             </text>
           );
         })}
+
+        {/* Marginal profiles (filled) and peak cuts (dashed), aligned with the structure */}
+        {prof && result && (() => {
+          const g = result.grid;
+          const HGT = PROFILE_PX;
+          const yb = size.h - PROFILE_BASE;
+          const xs = Array.from(g.x, (x) => P(x, 0)[0]);
+          const ys = Array.from(g.y, (y) => P(0, y)[1]);
+          const line = (pts: [number, number][]) => pts.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('');
+          const bx = (a: Float32Array): [number, number][] => xs.map((x, i) => [x, yb - a[i] * HGT]);
+          const ly = (a: Float32Array): [number, number][] => ys.map((y, j) => [a[j] * HGT, y]);
+          return (
+            <g pointerEvents="none" opacity={stale ? 0.45 : 1} className="profiles">
+              <rect x={0} y={yb - HGT - 6} width={W} height={HGT + 6} className="profile-bg" />
+              <rect x={0} y={0} width={HGT + 6} height={yb - HGT - 6} className="profile-bg" />
+              <path d={`${line(bx(prof.marginalX))}L${xs[xs.length - 1]},${yb}L${xs[0]},${yb}Z`} className="profile-fill" />
+              <path d={line(bx(prof.marginalX))} className="profile-line" />
+              <path d={line(bx(prof.cutX))} className="profile-cut" />
+              <path d={`${line(ly(prof.marginalY))}L0,${ys[ys.length - 1]}L0,${ys[0]}Z`} className="profile-fill" />
+              <path d={line(ly(prof.marginalY))} className="profile-line" />
+              <path d={line(ly(prof.cutY))} className="profile-cut" />
+              <line x1={0} x2={W} y1={yb} y2={yb} className="profile-axis" />
+            </g>
+          );
+        })()}
 
         {/* Handles */}
         {selFeature &&

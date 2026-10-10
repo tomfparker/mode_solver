@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildTemplate } from '../../geometry/templates';
 import type { RectFeature, TrapezoidFeature } from '../../geometry/types';
 import { applyDrag, handlesFor, snap, snapTargets, type SnapContext } from './handles';
+import type { ModeResult } from '../../solver/types';
+import { profiles } from './fieldImage';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt } from './view';
 
 const size = { w: 800, h: 600 };
@@ -109,3 +111,34 @@ describe('drag handles', () => {
     }
   });
 });
+
+describe('profiles', () => {
+  // A separable Gaussian in Ex on a 21 × 11 grid, centred off-middle in y.
+  const nx = 21;
+  const ny = 11;
+  const x = Float64Array.from({ length: nx }, (_, i) => i - 10);
+  const y = Float64Array.from({ length: ny }, (_, j) => j - 3);
+  const re = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) re[j * nx + i] = Math.exp(-((x[i] / 4) ** 2) - (y[j] / 2) ** 2);
+  const zero = new Float32Array(nx * ny);
+  const mode = { fields: { Ex: { re, im: zero } } } as unknown as ModeResult;
+  const grid = { x, y, nx, ny };
+
+  it('for a separable field, marginals and peak cuts have the same shape', () => {
+    const p = profiles(mode, grid, 'E2')!;
+    for (let i = 0; i < nx; i++) expect(p.marginalX[i]).toBeCloseTo(p.cutX[i], 5);
+    for (let j = 0; j < ny; j++) expect(p.marginalY[j]).toBeCloseTo(p.cutY[j], 5);
+  });
+
+  it('is normalised to 1 at the peak, which sits where the field does', () => {
+    const p = profiles(mode, grid, 'Ex')!;
+    expect(Math.max(...p.marginalX)).toBeCloseTo(1, 6);
+    expect(p.cutX.indexOf(Math.max(...p.cutX))).toBe(10); // x = 0
+    expect(p.cutY.indexOf(Math.max(...p.cutY))).toBe(3); // y = 0
+  });
+
+  it('returns null for a component the mode does not have', () => {
+    expect(profiles(mode, grid, 'Hz')).toBeNull();
+  });
+});
+

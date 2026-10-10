@@ -136,6 +136,60 @@ export function fieldDataUrl(
   return c.toDataURL();
 }
 
+export interface Profiles {
+  /** Displayed quantity integrated over y, as a function of x (normalised to its maximum). */
+  marginalX: Float32Array;
+  /** Integrated over x, as a function of y. */
+  marginalY: Float32Array;
+  /** Cuts through the peak (row and column of the maximum), normalised to the peak. */
+  cutX: Float32Array;
+  cutY: Float32Array;
+}
+
+/**
+ * Marginal profiles and peak cuts of what the canvas shows: |E|² for the intensity view, or
+ * the squared magnitude of the selected field component.
+ */
+export function profiles(m: ModeResult, g: FieldGrid, view: FieldView): Profiles | null {
+  let q: Float32Array;
+  if (view === 'E2') q = intensity(m);
+  else {
+    const f = m.fields[view];
+    if (!f) return null;
+    q = new Float32Array(f.re.length);
+    for (let i = 0; i < q.length; i++) q[i] = f.re[i] ** 2 + f.im[i] ** 2;
+  }
+  const { nx, ny } = g;
+  const marginalX = new Float32Array(nx);
+  const marginalY = new Float32Array(ny);
+  let peak = 0;
+  let ip = 0;
+  let jp = 0;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const v = q[j * nx + i];
+      marginalX[i] += v;
+      marginalY[j] += v;
+      if (v > peak) {
+        peak = v;
+        ip = i;
+        jp = j;
+      }
+    }
+  }
+  if (peak <= 0) return null;
+  const norm = (a: Float32Array) => {
+    let mx = 0;
+    for (const v of a) mx = Math.max(mx, v);
+    return a.map((v) => v / mx);
+  };
+  const cutX = new Float32Array(nx);
+  const cutY = new Float32Array(ny);
+  for (let i = 0; i < nx; i++) cutX[i] = q[jp * nx + i] / peak;
+  for (let j = 0; j < ny; j++) cutY[j] = q[j * nx + ip] / peak;
+  return { marginalX: norm(marginalX), marginalY: norm(marginalY), cutX, cutY };
+}
+
 /** 1/e² intensity contour as polylines in absolute µm. */
 export function e2Contour(m: ModeResult, g: FieldGrid): [number, number][][] {
   const I = intensity(m);

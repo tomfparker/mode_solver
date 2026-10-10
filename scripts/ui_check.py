@@ -210,6 +210,12 @@ try:
     shot("drive-6-ex")
     ok("no JS errors", not errors(), json.dumps(errors())[:300])
 
+    # Profiles option: marginal and peak-cut strips on the canvas
+    d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
+    ok("Profiles option draws the strips", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, "g.profiles path")) == 6))
+    d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
+    ok("and hides them again", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "g.profiles")))
+
     # About page
     d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='About']").click()
     about = wait(lambda: d.find_element(By.CSS_SELECTOR, "main.about").text)

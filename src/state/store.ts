@@ -16,6 +16,8 @@ export interface UiState {
   fieldView: FieldView;
   fieldOpacity: number;
   showContour: boolean;
+  /** Marginal profiles and peak cuts along the canvas edges. */
+  showProfiles: boolean;
   selectedMode: number;
   advancedOpen: boolean;
   /** Pop-up editor for the selected shape (or background) is open. */
@@ -69,7 +71,7 @@ export const useStore = create<State>((set, get) => ({
   future: [],
   lastEdit: null,
   selection: null,
-  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: true, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
+  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: true, showProfiles: false, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
   notice: null,
   viewEpoch: 0,
 
