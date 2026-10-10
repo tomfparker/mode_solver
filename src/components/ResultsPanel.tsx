@@ -18,10 +18,11 @@ import { usePrefersDark } from './usePrefersDark';
 interface Props {
   result: SolveResult | null;
   stale: boolean;
+  solving: boolean;
   error: string | null;
 }
 
-export function ResultsPanel({ result, stale, error }: Props) {
+export function ResultsPanel({ result, stale, solving, error }: Props) {
   const project = useStore((s) => s.project);
   const selected = useStore((s) => s.ui.selectedMode);
   const setUi = useStore((s) => s.setUi);
@@ -35,7 +36,7 @@ export function ResultsPanel({ result, stale, error }: Props) {
       <section className="section">
         <div className="section-head">
           <h2 className="section-title">Modes at {fmtWavelengthNm(project.wavelength)}</h2>
-          <span className="results-status">{error ? 'Solver error' : stale ? 'Updating…' : result ? (result.isMock ? 'Preview (mock)' : 'Up to date') : 'Solving…'}</span>
+          <span className="results-status">{error ? 'Solver error' : solving ? 'Solving…' : stale ? 'Out of date' : result ? (result.isMock ? 'Preview (mock)' : 'Up to date') : 'Not solved yet'}</span>
         </div>
         {error && <div className="warning"><span className="icon">!</span><span>{error}</span></div>}
         {m && (
@@ -131,7 +132,13 @@ function Warnings({ warnings }: { warnings: Warning[] }) {
             {w.action?.kind === 'increase-padding' && (
               <>
                 <br />
-                <button className="btn small" onClick={() => update((p) => void (p.settings.padding = w.action!.padding))}>
+                <button
+                  className="btn small"
+                  onClick={() => {
+                    update((p) => void (p.settings.padding = w.action!.padding));
+                    window.dispatchEvent(new Event('solve-now'));
+                  }}
+                >
                   {w.action.label}
                 </button>
               </>

@@ -6,7 +6,7 @@ import { ResultsPanel } from '../components/ResultsPanel';
 import { StructurePanel } from '../components/StructurePanel';
 import { TopBar } from '../components/TopBar';
 import { useStore } from '../state/store';
-import { useLiveSolve, useShortcuts, useUrlSync } from './hooks';
+import { useShortcuts, useSolver, useUrlSync } from './hooks';
 import './app.css';
 
 function NoticeToast() {
@@ -32,14 +32,14 @@ export function App() {
   useUrlSync();
   useShortcuts();
   const project = useStore((s) => s.project);
-  const { result, stale, error, status, isMock } = useLiveSolve(project);
+  const { result, outOfDate, solving, solve, cancel, error, status, isMock } = useSolver(project);
 
   return (
     <div className="app">
-      <TopBar status={status} mock={isMock} />
+      <TopBar status={status} mock={isMock} solving={solving} outOfDate={outOfDate} onSolve={solve} onCancel={cancel} />
       <StructurePanel />
-      <CanvasView result={result} stale={stale} />
-      <ResultsPanel result={result} stale={stale} error={error} />
+      <CanvasView result={result} stale={outOfDate} solving={solving} />
+      <ResultsPanel result={result} stale={outOfDate} solving={solving} error={error} />
       <NoticeToast />
     </div>
   );

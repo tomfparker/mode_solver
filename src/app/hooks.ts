@@ -1,6 +1,6 @@
 // App-level hooks: live solving, URL sync, keyboard shortcuts.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { uid } from '../geometry/geometry';
 import type { Project } from '../geometry/types';
 import { MockSolver } from '../solver/mockSolver';
@@ -8,44 +8,72 @@ import { isAbortError, type Solver, type SolveResult, type SolverStatus } from '
 import { deleteFeature, deleteLayer, patchFeature, useStore } from '../state/store';
 import { decodeHash, encodeProject } from '../state/url';
 
-const DEBOUNCE_MS = 150;
-
 /**
- * Debounced, latest-wins solve on every project change. The previous result stays visible
- * (dimmed via `stale`) until the new one arrives, so editing never blocks.
+ * Solve on demand (Solve button / Ctrl+Enter). Edits mark the shown result out of date
+ * rather than re-solving. A new project (first load, template, shared link) solves by itself
+ * so the canvas is never blank.
  */
-export function useLiveSolve(project: Project) {
+export function useSolver(project: Project) {
   const solver: Solver = useMemo(() => new MockSolver(), []);
   const [status, setStatus] = useState<SolverStatus>(solver.status());
   const [state, setState] = useState<{ result: SolveResult; key: string } | null>(null);
+  const [solving, setSolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const key = useMemo(() => JSON.stringify(project), [project]);
+  const running = useRef<AbortController | null>(null);
+  const viewEpoch = useStore((s) => s.viewEpoch);
 
   useEffect(() => solver.onStatus(setStatus), [solver]);
   useEffect(() => () => solver.dispose(), [solver]);
 
+  const solve = useCallback(() => {
+    running.current?.abort();
+    const ac = new AbortController();
+    running.current = ac;
+    const p = useStore.getState().project; // solve what is in the store right now
+    const k = JSON.stringify(p);
+    setSolving(true);
+    setError(null);
+    solver
+      .solve({ id: uid('solve'), project: p, numModes: p.settings.numModes }, ac.signal)
+      .then(
+        (result) => setState({ result, key: k }),
+        (e) => {
+          if (!isAbortError(e)) setError(e instanceof Error ? e.message : String(e));
+        },
+      )
+      .finally(() => {
+        if (running.current === ac) {
+          running.current = null;
+          setSolving(false);
+        }
+      });
+  }, [solver]);
+
+  const cancel = useCallback(() => {
+    running.current?.abort();
+    running.current = null;
+    setSolving(false);
+  }, []);
+
+  // New project loaded (including the first one): solve it straight away.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      solver
-        .solve({ id: uid('solve'), project, numModes: project.settings.numModes })
-        .then(
-          (result) => {
-            setState({ result, key });
-            setError(null);
-          },
-          (e) => {
-            if (!isAbortError(e)) setError(e instanceof Error ? e.message : String(e));
-          },
-        );
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // `key` captures every project change; `project` is the same data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, solver]);
+    const t = setTimeout(solve, 0);
+    return () => clearTimeout(t);
+  }, [viewEpoch, solve]);
+
+  // Ctrl+Enter and "fix" actions ask for a solve via this event.
+  useEffect(() => {
+    window.addEventListener('solve-now', solve);
+    return () => window.removeEventListener('solve-now', solve);
+  }, [solve]);
 
   return {
     result: state?.result ?? null,
-    stale: state !== null && state.key !== key,
+    outOfDate: state !== null && state.key !== key,
+    solving,
+    solve,
+    cancel,
     error,
     status,
     isMock: solver.name === 'mock',
@@ -118,6 +146,12 @@ export function useShortcuts() {
         const st = useStore.getState();
         if (k === 'y' || e.shiftKey) st.redo();
         else st.undo();
+        return;
+      }
+      if (mod && e.key === 'Enter') {
+        e.preventDefault();
+        if (inTextInput(e.target)) (e.target as HTMLElement).blur(); // commit the typed value first
+        window.dispatchEvent(new Event('solve-now'));
         return;
       }
       if (inTextInput(e.target) || mod || e.altKey) return;

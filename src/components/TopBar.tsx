@@ -7,8 +7,6 @@ import { useStore } from '../state/store';
 import { parseLength } from '../state/units';
 import type { SolverStatus } from '../solver/types';
 
-const PRESETS = [0.532, 0.633, 0.78, 1.064, 1.31, 1.55];
-
 function WavelengthControl() {
   const lam = useStore((s) => s.project.wavelength);
   const update = useStore((s) => s.update);
@@ -61,13 +59,6 @@ function WavelengthControl() {
         aria-label="Wavelength in nm"
       />
       <span className="unit">nm</span>
-      <div className="chips" role="group" aria-label="Common wavelengths">
-        {PRESETS.map((p) => (
-          <button key={p} className={`chip${Math.abs(p - lam) < 1e-6 ? ' on' : ''}`} onClick={() => setLam(p)}>
-            {Math.round(p * 1000)}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -88,7 +79,16 @@ function StatusChip({ status, mock }: { status: SolverStatus; mock: boolean }) {
   );
 }
 
-export function TopBar({ status, mock }: { status: SolverStatus; mock: boolean }) {
+interface TopBarProps {
+  status: SolverStatus;
+  mock: boolean;
+  solving: boolean;
+  outOfDate: boolean;
+  onSolve: () => void;
+  onCancel: () => void;
+}
+
+export function TopBar({ status, mock, solving, outOfDate, onSolve, onCancel }: TopBarProps) {
   const name = useStore((s) => s.project.name);
   const update = useStore((s) => s.update);
   const replace = useStore((s) => s.replaceProject);
@@ -116,6 +116,19 @@ export function TopBar({ status, mock }: { status: SolverStatus; mock: boolean }
       </span>
       <TextField className="project-name" value={name} ariaLabel="Project name" onCommit={(v) => update((p) => void (p.name = v))} />
       <WavelengthControl />
+      {solving ? (
+        <button className="btn solve" onClick={onCancel} title="Stop this solve">
+          Cancel
+        </button>
+      ) : (
+        <button
+          className={`btn solve${outOfDate ? ' primary attention' : ''}`}
+          onClick={onSolve}
+          title="Solve for the modes of the current structure (Ctrl+Enter)"
+        >
+          ▶ Solve
+        </button>
+      )}
       <select
         className="field"
         style={{ width: 130 }}

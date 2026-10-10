@@ -76,3 +76,13 @@ Each discrete edit is one undo step. A drag gesture, or a burst of arrow-key nud
 
 ## 2026-10-05 — Scripted UI check with Selenium + the Firefox snap's geckodriver
 `scripts/ui_check.py` drives the built app in headless Firefox: editing, drag handles, undo, wavelength, templates, URL round-trip, warnings, and JS errors. It's a stopgap, because Playwright's browser downloads time out on this network. The M6 Playwright smoke test remains the target.
+
+## 2026-10-10 — Maintainer: Solve button instead of live solving
+Replaces CLAUDE.md UI principle 3 ("Live results, no Run button"), now updated. Edits mark results out of date (dimmed, with a canvas pill and a highlighted Solve button). Solve or Ctrl+Enter solves the current state; while a solve runs the button becomes Cancel. A newly loaded project (first load, template, shared link) solves automatically, so the app never opens blank. A warning's "fix" button applies the fix and solves.
+Consequence for M2: the semi-vector-while-dragging plan is no longer needed. Each Solve runs the chosen solver (full-vector by default).
+
+## 2026-10-10 — Maintainer: wavelength preset buttons removed
+The wavelength field stays prominent; arrow keys step 1 nm (Shift: 10 nm).
+
+## 2026-10-10 — Simulation window labelled on the canvas
+The dashed rectangle is now labelled "Simulation window", with a tooltip explaining that its edges act as walls and where to resize it. The maintainer couldn't tell what it was.

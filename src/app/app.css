@@ -142,7 +142,7 @@ button, input, select { font: inherit; color: inherit; }
 
 .wavelength {
   display: flex; align-items: center; gap: 8px;
-  padding: 4px 6px 4px 10px;
+  padding: 4px 10px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface);
 }
@@ -153,14 +153,6 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--surface);
 }
 .wavelength .unit { color: var(--text-2); font-size: 14px; }
-.chips { display: flex; gap: 2px; }
-.chip {
-  border: 1px solid var(--border); background: var(--surface-2); border-radius: 999px;
-  padding: 1px 8px; font-size: 12px; cursor: pointer; color: var(--text-2);
-}
-.chip:hover { border-color: var(--border-strong); color: var(--text); }
-.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-
 .btn {
   display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--radius);
@@ -169,6 +161,8 @@ button, input, select { font: inherit; color: inherit; }
 .btn:hover:not(:disabled) { background: var(--surface-2); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.solve { font-weight: 600; padding: 5px 14px; min-width: 92px; justify-content: center; }
+.btn.solve.attention { box-shadow: 0 0 0 3px var(--accent-soft); }
 .btn.small { padding: 1px 6px; font-size: 12px; }
 .btn.icon { padding: 2px 6px; min-width: 26px; justify-content: center; }
 .btn.ghost { border-color: transparent; background: transparent; }

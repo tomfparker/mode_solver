@@ -56,6 +56,12 @@ def errors():
 def neff0():
     return d.execute_script("const td=document.querySelector('table.modes tbody tr td:nth-child(2)'); return td && td.textContent")
 
+def status():
+    return d.find_element(By.CSS_SELECTOR, ".results-status").text
+
+def click_solve():
+    d.find_element(By.XPATH, "//button[contains(@class,'solve')]").click()
+
 def hash_():
     return d.execute_script("return location.hash")
 
@@ -73,7 +79,11 @@ try:
     n_before = neff0()
     width.send_keys(Keys.CONTROL, "a"); width.send_keys("2 um", Keys.ENTER)
     ok("typed '2 um' → shows 2000 nm", wait(lambda: width.get_attribute("value") == "2000"), width.get_attribute("value"))
-    ok("re-solve changes n_eff", wait(lambda: neff0() != n_before, 3), f"{n_before} → {neff0()}")
+    time.sleep(0.4)
+    ok("edit does not re-solve; results marked out of date", neff0() == n_before and status() == "Out of date", status())
+    click_solve()
+    ok("Solve button updates n_eff", wait(lambda: neff0() != n_before, 3), f"{n_before} → {neff0()}")
+    ok("status back to up to date", wait(lambda: status() == "Preview (mock)"), status())
     shot("drive-1-width")
 
     # Arrow keys in field
@@ -112,8 +122,9 @@ try:
     ok("dragging BOX top edge changes its thickness", meta != "4000 nm", meta)
 
     # Wavelength chip 780 → Si out-of-range warning (substrate Si)
-    d.find_element(By.XPATH, "//button[contains(@class,'chip') and text()='780']").click()
-    ok("λ chip sets 780", wait(lambda: d.find_element(By.ID, "wavelength").get_attribute("value") == "780"))
+    wl = d.find_element(By.ID, "wavelength")
+    wl.send_keys(Keys.CONTROL, "a"); wl.send_keys("780", Keys.ENTER)
+    ok("typing 780 sets λ", wait(lambda: d.find_element(By.ID, "wavelength").get_attribute("value") == "780"))
     ok("Si range warning at 780 nm", wait(lambda: "outside the published data range for Si" in d.find_element(By.CSS_SELECTOR, ".panel-right").text))
     shot("drive-3-780")
 
@@ -138,7 +149,8 @@ try:
     for k in ["Rectangle", "Trapezoid", "Circle", "Polygon", "Graded index"]:
         d.find_element(By.XPATH, f"//div[@class='add-menu']/button[contains(., '{k}')]").click()
         time.sleep(0.3)
-    ok("adding 5 shapes keeps solving", wait(lambda: neff0()), neff0())
+    ActionChains(d).key_down(Keys.CONTROL).send_keys(Keys.ENTER).key_up(Keys.CONTROL).perform()
+    ok("Ctrl+Enter solves after adding 5 shapes", wait(lambda: status() == "Preview (mock)"), status())
     shot("drive-4-shapes")
 
     # URL round trip: reload current hash in fresh page
@@ -160,6 +172,7 @@ try:
     auto.click()
     pad = d.find_element(By.CSS_SELECTOR, "input[aria-label='Padding']")
     pad.send_keys(Keys.CONTROL, "a"); pad.send_keys("200 nm", Keys.ENTER)
+    click_solve()
     ok("tiny padding triggers boundary warning", wait(lambda: "reaches the edge" in d.find_element(By.CSS_SELECTOR, ".panel-right").text))
     shot("drive-5-boundary")
     btn = d.find_elements(By.XPATH, "//button[starts-with(text(),'Set padding')]")

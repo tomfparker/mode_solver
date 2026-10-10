@@ -49,7 +49,7 @@ Never present more significant figures than the accuracy supports (default: n_ef
 - **Solver:** Python (numpy/scipy) running in **Pyodide inside a Web Worker**, behind a typed `Solver` interface (`src/solver/types.ts`). UI code never imports Pyodide directly. The interface must stay swappable for a future Rust→WASM backend.
 - **Python numerics live in `solver_py/` as a normal package**, so the same code is testable natively with pytest and loaded into Pyodide at runtime.
 - **State:** a single serialisable `Project` object (geometry, materials, wavelength, coupling path, settings). The URL hash encodes it (compressed). Results are derived and never stored in project state.
-- **Solves are debounced and cancellable.** The latest edit wins; stale results are shown dimmed rather than blocking the UI.
+- **Solves run on demand and are cancellable.** The Solve button (Ctrl+Enter) solves the current project; edits mark the shown result "out of date" (dimmed) rather than re-solving. A newly loaded project (first load, template, shared link) solves by itself.
 
 Suggested layout (adjust if there's good reason, and update this file):
 ```
@@ -100,7 +100,7 @@ data/
 
 1. **Numbers are the source of truth; drawing is an input method.** Every object is a list entry with editable numeric parameters. Canvas drag handles and numeric fields edit the same object. Snapping, plus nm-level entry.
 2. **Layer stack first, shapes second.** Infinite slabs (substrate, BOX, film, cladding) plus a few features. Most structures need no drawing at all.
-3. **Live results, no Run button.** Debounced re-solve on edit. Show the field overlaid on geometry outlines in the main canvas (|E|², Ex, Ey, Ez, Hx… toggle; 1/e² contour).
+3. **Solve button, results never blocked.** A prominent Solve button (Ctrl+Enter); after an edit the previous result stays visible, dimmed and marked out of date. Newly loaded projects solve automatically. Show the field overlaid on geometry outlines in the main canvas (|E|², Ex, Ey, Ez, Hx… toggle; 1/e² contour). *(Changed from live solving at the maintainer's request, 2026-10-10.)*
 4. **Never a blank canvas.** Open on a working example (SiN strip at 1550 nm). Templates: strip, rib, slot, step-index fibre, diffused channel, LN ridge.
 5. **One screen, three zones:** structure (left) | canvas (centre) | results + mode thumbnails + warnings (right). The coupling path strip sits below the results.
 6. **Wavelength is a global, prominent control.**

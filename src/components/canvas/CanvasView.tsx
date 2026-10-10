@@ -40,7 +40,7 @@ function matName(p: Project, id: string) {
   return materialInfo(id, p.customMaterials)?.name ?? id;
 }
 
-export function CanvasView({ result, stale }: { result: SolveResult | null; stale: boolean }) {
+export function CanvasView({ result, stale, solving }: { result: SolveResult | null; stale: boolean; solving: boolean }) {
   const project = useStore((s) => s.project);
   const selection = useStore((s) => s.selection);
   const ui = useStore((s) => s.ui);
@@ -294,7 +294,9 @@ export function CanvasView({ result, stale }: { result: SolveResult | null; stal
         <button className="btn icon" title="Fit to window (F)" onClick={fit}>⤢</button>
       </div>
 
-      {stale && <div className="updating">updating…</div>}
+      {(solving || stale) && (
+        <div className="updating">{solving ? 'Solving…' : 'Out of date: press Solve (Ctrl+Enter)'}</div>
+      )}
 
       <svg
         ref={svgRef}
@@ -339,6 +341,10 @@ export function CanvasView({ result, stale }: { result: SolveResult | null; stal
 
         {/* Simulation window */}
         <rect x={dx0} y={dy1} width={dx1 - dx0} height={dy0 - dy1} fill="none" stroke="var(--text-3)" strokeDasharray="2 4" pointerEvents="none" />
+        <text className="canvas-label" x={dx1 - 6} y={dy0 - 6} textAnchor="end" style={{ pointerEvents: 'auto', cursor: 'help' }}>
+          Simulation window
+          <title>The solver computes modes only inside this window; its edges act as walls. Size it under Advanced → Padding.</title>
+        </text>
 
         {/* Outlines on top of the field, also the hit areas for shapes */}
         {project.features.map((f) => (
