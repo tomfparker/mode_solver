@@ -211,7 +211,9 @@ try:
     ok("no JS errors", not errors(), json.dumps(errors())[:300])
 
     # Profiles option: marginal and peak-cut strips on the canvas
-    ok("profiles are on by default, with rulers and MFD marks", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, "g.profiles > path")) == 6)
+    ok("profiles are off by default", not d.find_elements(By.CSS_SELECTOR, "g.profiles"))
+    d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
+    ok("ticking Profiles shows them, with rulers and MFD marks, and no backing panel", not d.find_elements(By.CSS_SELECTOR, ".profile-bg") and wait(lambda: len(d.find_elements(By.CSS_SELECTOR, "g.profiles > path")) == 6)
        and len(d.find_elements(By.CSS_SELECTOR, "g.profiles .ruler-label")) > 6 and len(d.find_elements(By.CSS_SELECTOR, "g.mfd-mark")) == 2)
     marks = d.execute_script("return [...document.querySelectorAll('g.mfd-mark text')].map(t => t.textContent)")
     # The view is Ex at this point, so the marks give that component's 1/e² width (they say "MFD" for |E|²).
@@ -223,6 +225,7 @@ try:
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
     ok("unticking Profiles hides them", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "g.profiles")))
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
+    shot("drive-6b-profiles")
 
     # Colours: the mode's colour scheme, and a per-material colour
     ok("the mode colour scheme defaults to Viridis", Select(d.find_element(By.ID, "colormap")).first_selected_option.text == "Viridis")
@@ -239,7 +242,7 @@ try:
     # Index gradient across a shape
     d.find_element(By.CSS_SELECTOR, "input[aria-label='Index gradient']").click()
     ok("ticking Index gradient shows its controls and shades the shape", wait(lambda: d.find_elements(By.CSS_SELECTOR, "select[aria-label='Gradient function']"))
-       and len(d.find_elements(By.CSS_SELECTOR, "svg linearGradient")) == 1)
+       and len(d.find_elements(By.CSS_SELECTOR, "svg linearGradient:not([id^=profile-grad])")) == 1)
     Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Gradient function']")).select_by_value("erfc")
     Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Gradient starts from']")).select_by_value("left")
     gl = d.find_element(By.CSS_SELECTOR, "input[aria-label='Gradient length']")
@@ -248,7 +251,7 @@ try:
     click_solve()
     ok("a shape with a gradient solves", wait(lambda: status() == "Preview (mock)"), status())
     d.find_element(By.CSS_SELECTOR, "input[aria-label='Index gradient']").click()
-    ok("unticking removes the gradient", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "svg linearGradient")))
+    ok("unticking removes the gradient", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "svg linearGradient:not([id^=profile-grad])")))
     d.find_element(By.CSS_SELECTOR, ".panel-right").click()
     ActionChains(d).send_keys(Keys.ESCAPE).perform()
 

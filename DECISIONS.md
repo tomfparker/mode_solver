@@ -176,3 +176,8 @@ Any non-graded shape (including full-width layers) can carry `gradient: { from, 
 ## 2026-10-11 — Maintainer: Viridis by default, cream oxide
 - The |E|² colour scheme defaults to Viridis (was Sunset). A scheme the user has already picked in their browser is kept.
 - SiO₂'s default colour is a pale cream (#f5eedc) instead of pale blue, since it is the background in most templates. LiNbO₃'s amber was deepened (#e6c283) and air lightened (#fdfcf9) so the three stay distinguishable. A background of another material keeps that material's colour: the colour belongs to the material, not to the background role.
+
+## 2026-10-11 — Maintainer: profiles off by default, drawn on the structure in the colour scheme
+- Profiles are off when the page loads (reverses the "on by default" of earlier the same day); the 1/e² contour stays off too.
+- The marginal fill and line are coloured by height with the selected |E|² colour scheme (zero at the axis, peak at full height), so they read like the field map. Single-component views use the same scheme for their |component|² profiles. The peak cut stays a dashed ink line.
+- The translucent backing panels behind the strips are gone: plots, rulers and MFD marks sit directly on the structure. The view still leaves room for the strips so they overlap the mode as little as possible.

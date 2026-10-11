@@ -11,7 +11,7 @@ import { patchFeature, useStore, type FieldView } from '../../state/store';
 import { formatLength, toDisplay, UNIT_LABEL } from '../../state/units';
 import type { SolveResult } from '../../solver/types';
 import { usePrefersDark } from '../usePrefersDark';
-import { COLORMAPS, DEFAULT_COLORMAP, e2Contour, fieldData, fieldDataUrl, profiles, type Colormap } from './fieldImage';
+import { COLORMAPS, DEFAULT_COLORMAP, colormapCss, e2Contour, fieldData, fieldDataUrl, profiles, type Colormap } from './fieldImage';
 import { ShapeEditor } from '../ShapeEditor';
 import { applyDrag, handlesFor, snapTargets, type SnapContext } from './handles';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt, type Size, type View } from './view';
@@ -494,16 +494,24 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
           const xTicks = ticks(toUm(view, size, HGT + 30, 0)[0], vx1);
           const yTicks = ticks(toUm(view, size, 0, yb - HGT - 16)[1], vy1);
           // In the |E|² view this is the MFD of the results table; for a single component it is that component's width.
+          const stops = colormapCss(colormap, dark);
           const widthLabel = ui.fieldView === 'E2' ? 'MFD' : '1/e² width';
           return (
             <g pointerEvents="none" opacity={stale ? 0.45 : 1} className="profiles">
-              <rect x={0} y={yb - HGT - 6} width={W} height={HGT + 6} className="profile-bg" />
-              <rect x={0} y={0} width={HGT + 6} height={yb - HGT - 6} className="profile-bg" />
-              <path d={`${line(bx(prof.marginalX))}L${xs[xs.length - 1]},${yb}L${xs[0]},${yb}Z`} className="profile-fill" />
-              <path d={line(bx(prof.marginalX))} className="profile-line" />
+              {/* Coloured by height with the selected colour scheme: zero at the axis, peak at full height. */}
+              <defs>
+                <linearGradient id="profile-grad-x" gradientUnits="userSpaceOnUse" x1={0} y1={yb} x2={0} y2={yb - HGT}>
+                  {stops.map((c, i) => <stop key={i} offset={i / (stops.length - 1)} stopColor={c} />)}
+                </linearGradient>
+                <linearGradient id="profile-grad-y" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={HGT} y2={0}>
+                  {stops.map((c, i) => <stop key={i} offset={i / (stops.length - 1)} stopColor={c} />)}
+                </linearGradient>
+              </defs>
+              <path d={`${line(bx(prof.marginalX))}L${xs[xs.length - 1]},${yb}L${xs[0]},${yb}Z`} className="profile-fill" style={{ fill: 'url(#profile-grad-x)' }} />
+              <path d={line(bx(prof.marginalX))} className="profile-line" style={{ stroke: 'url(#profile-grad-x)' }} />
               <path d={line(bx(prof.cutX))} className="profile-cut" />
-              <path d={`${line(ly(prof.marginalY))}L0,${ys[ys.length - 1]}L0,${ys[0]}Z`} className="profile-fill" />
-              <path d={line(ly(prof.marginalY))} className="profile-line" />
+              <path d={`${line(ly(prof.marginalY))}L0,${ys[ys.length - 1]}L0,${ys[0]}Z`} className="profile-fill" style={{ fill: 'url(#profile-grad-y)' }} />
+              <path d={line(ly(prof.marginalY))} className="profile-line" style={{ stroke: 'url(#profile-grad-y)' }} />
               <path d={line(ly(prof.cutY))} className="profile-cut" />
               <line x1={0} x2={W} y1={yb} y2={yb} className="profile-axis" />
               <line x1={0.5} x2={0.5} y1={0} y2={yb} className="profile-axis" />
