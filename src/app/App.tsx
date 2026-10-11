@@ -80,6 +80,7 @@ export function App() {
         />
       )}
       {longSolve && <LoadingScreen title="Solving" detail={`${Math.round(elapsed / 1000)} s elapsed`} onCancel={cancel} />}
+      <div className="art-strip" aria-hidden="true" />
       <TopBar status={status} mock={isMock} solving={solving} outOfDate={outOfDate} onSolve={solve} onCancel={cancel} />
       {page === 'about' ? (
         <AboutPage />
@@ -91,6 +92,7 @@ export function App() {
           <ResultsPanel result={result} stale={outOfDate} busy={busy} error={error ?? (status.state === 'error' ? status.message : null)} />
         </>
       )}
+      <div className="art-strip bottom" aria-hidden="true" />
       <NoticeToast />
     </div>
   );

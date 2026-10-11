@@ -181,3 +181,12 @@ Any non-graded shape (including full-width layers) can carry `gradient: { from, 
 - Profiles are off when the page loads (reverses the "on by default" of earlier the same day); the 1/e² contour stays off too.
 - The marginal fill and line are coloured by height with the selected |E|² colour scheme (zero at the axis, peak at full height), so they read like the field map. Single-component views use the same scheme for their |component|² profiles. The peak cut stays a dashed ink line.
 - The translucent backing panels behind the strips are gone: plots, rulers and MFD marks sit directly on the structure. The view still leaves room for the strips so they overlap the mode as little as possible.
+
+## 2026-10-11 — Maintainer: profile colour runs along the position axis
+- The marginal fill and line are now coloured along the strip (x for the bottom strip, y for the left one): each point takes the colour-scheme colour of the marginal's value there, so the strip reads like a slice of the field map. Supersedes "coloured by height" in the entry above.
+
+## 2026-10-11 — Maintainer: artwork strips across the top and bottom, no About banner
+- A thin (12 px) strip of the artwork, supplied by the maintainer as a slice through the disc's rings, runs across the full page width above the top bar on both the Solver and About pages (`src/assets/strip.webp`, stretched to fit). The same strip, flipped vertically, closes the bottom of the page. The About page no longer shows the rectangular banner; `banner.webp` stays in `src/assets` as the colour reference but is not shipped.
+
+## 2026-10-11 — Maintainer: new disc artwork
+- The loader, brand mark and favicon now use the maintainer's new circular image (orange disc with an off-centre dark hole), replacing the earlier ringed disc. `src/assets/disc.webp` and `public/favicon.png` are generated from the supplied `src/assets/layer1.png`, which is kept as the source. Because the hole is off-centre, it orbits as the loader spins.

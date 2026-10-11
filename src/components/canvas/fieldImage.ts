@@ -44,9 +44,13 @@ function ramps(map: Colormap, dark: boolean) {
   return dark ? { seq: [...seq].reverse(), neg: [...NEG].reverse(), pos: [...POS].reverse() } : { seq, neg: NEG, pos: POS };
 }
 
-/** The |E|² ramp as CSS colours, from zero to peak, oriented for the surface (for SVG gradients). */
-export function colormapCss(map: Colormap, dark: boolean): string[] {
-  return ramps(map, dark).seq.map(([r, g, b]) => `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`);
+/** The |E|² colour of each normalised value (0 = zero, 1 = peak), oriented for the surface (for SVG gradients). */
+export function colormapCss(map: Colormap, dark: boolean, values: ArrayLike<number>): string[] {
+  const { seq } = ramps(map, dark);
+  return Array.from(values, (v) => {
+    const [r, g, b] = ramp(seq, v);
+    return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+  });
 }
 
 export function prefersDark(): boolean {

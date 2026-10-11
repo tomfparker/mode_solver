@@ -494,17 +494,21 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
           const xTicks = ticks(toUm(view, size, HGT + 30, 0)[0], vx1);
           const yTicks = ticks(toUm(view, size, 0, yb - HGT - 16)[1], vy1);
           // In the |E|² view this is the MFD of the results table; for a single component it is that component's width.
-          const stops = colormapCss(colormap, dark);
+          // Gradient stops along a strip's position axis: each sample takes the colour of its own value.
+          const stops = (px: number[], a: Float32Array) => {
+            const span = px[px.length - 1] - px[0] || 1;
+            return colormapCss(colormap, dark, a).map((c, i) => <stop key={i} offset={(px[i] - px[0]) / span} stopColor={c} />);
+          };
           const widthLabel = ui.fieldView === 'E2' ? 'MFD' : '1/e² width';
           return (
             <g pointerEvents="none" opacity={stale ? 0.45 : 1} className="profiles">
-              {/* Coloured by height with the selected colour scheme: zero at the axis, peak at full height. */}
+              {/* Coloured along the position axis with the selected colour scheme, like the field map: each point takes the colour of its value. */}
               <defs>
-                <linearGradient id="profile-grad-x" gradientUnits="userSpaceOnUse" x1={0} y1={yb} x2={0} y2={yb - HGT}>
-                  {stops.map((c, i) => <stop key={i} offset={i / (stops.length - 1)} stopColor={c} />)}
+                <linearGradient id="profile-grad-x" gradientUnits="userSpaceOnUse" x1={xs[0]} y1={0} x2={xs[xs.length - 1]} y2={0}>
+                  {stops(xs, prof.marginalX)}
                 </linearGradient>
-                <linearGradient id="profile-grad-y" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={HGT} y2={0}>
-                  {stops.map((c, i) => <stop key={i} offset={i / (stops.length - 1)} stopColor={c} />)}
+                <linearGradient id="profile-grad-y" gradientUnits="userSpaceOnUse" x1={0} y1={ys[0]} x2={0} y2={ys[ys.length - 1]}>
+                  {stops(ys, prof.marginalY)}
                 </linearGradient>
               </defs>
               <path d={`${line(bx(prof.marginalX))}L${xs[xs.length - 1]},${yb}L${xs[0]},${yb}Z`} className="profile-fill" style={{ fill: 'url(#profile-grad-x)' }} />

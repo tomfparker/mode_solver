@@ -90,14 +90,18 @@ button, input, select { font: inherit; color: inherit; }
 /* ---- Layout -------------------------------------------------------------------------- */
 .app {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
   grid-template-columns: minmax(260px, 300px) minmax(360px, 1fr) minmax(300px, 360px);
   grid-template-areas:
+    'art art art'
     'top top top'
-    'left canvas right';
+    'left canvas right'
+    'foot foot foot';
   height: 100%;
   min-width: 960px;
 }
+.art-strip { grid-area: art; }
+.art-strip.bottom { grid-area: foot; }
 .topbar { grid-area: top; }
 .panel-left { grid-area: left; }
 .canvas-zone { grid-area: canvas; }
@@ -106,12 +110,14 @@ button, input, select { font: inherit; color: inherit; }
 /* Tablet portrait: results move under the canvas. */
 @media (max-width: 1100px) {
   .app {
-    grid-template-rows: auto minmax(420px, 62vh) auto;
+    grid-template-rows: auto auto minmax(420px, 62vh) auto auto;
     grid-template-columns: minmax(260px, 300px) 1fr;
     grid-template-areas:
+      'art art'
       'top top'
       'left canvas'
-      'left right';
+      'left right'
+      'foot foot';
     height: auto;
     min-height: 100%;
     min-width: 760px;
@@ -487,7 +493,6 @@ details.advanced summary { text-transform: uppercase; letter-spacing: 0.04em; co
 .about th { background: var(--text); color: var(--bg); padding: 4px 8px; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.04em; border-bottom: 0; }
 .about td { border-bottom: 1px solid var(--border); padding: 5px 8px; }
 .about a { color: inherit; }
-.about .banner { display: block; width: 100%; height: 240px; object-fit: cover; object-position: 50% 42%; border: 3px solid var(--border); margin-bottom: 28px; }
 
 /* ==== Loading screen ====================================================================== */
 .loading-screen {
@@ -548,7 +553,6 @@ table.modes td, .about td { border-bottom-color: rgb(20 18 16 / 0.18); }
 .row.selected { border-color: var(--border); }
 .coupling-strip .node { border-width: 1px; }
 .about h2 { border-top-width: 1.5px; }
-.about .banner { border-width: 1.5px; opacity: 0.94; }
 .profile-bg { fill: var(--glass); }
 .profile-fill { fill-opacity: 0.22; }
 .profile-line { stroke-width: 1.75; }
@@ -600,7 +604,6 @@ table.modes td, .about td { border-bottom-color: rgb(20 18 16 / 0.18); }
 .about h1 { font-weight: 800; font-size: 38px; letter-spacing: 0; text-transform: none; }
 .about h2 { border-top-width: 1px; font-size: 12.5px; }
 .about .lead { font-weight: 600; }
-.about .banner { border: 0; border-radius: calc(var(--radius) * 1.5); opacity: 1; }
 
 .btn { border-width: 1px; font-weight: 500; }
 .btn.primary, .btn.solve { background: var(--accent); color: #fff; text-transform: none; letter-spacing: 0.02em; font-weight: 600; }
@@ -640,3 +643,7 @@ table.modes td, .about td { border-bottom-color: var(--border); }
 /* Profiles drawn straight onto the structure: no backing panel; fill and line take the colour scheme (set inline). */
 .profile-fill { fill-opacity: 0.8; }
 .profile-line { stroke-width: 1.5; }
+
+/* Artwork strips across the top and bottom of every page: a slice through the disc's rings, stretched to the page width. */
+.art-strip { height: 12px; background: url('../assets/strip.webp') center / 100% 100% no-repeat; }
+.art-strip.bottom { transform: scaleY(-1); }

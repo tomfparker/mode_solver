@@ -3,7 +3,6 @@
 // update both together. The material list is generated from the data files.
 
 import type { ReactNode } from 'react';
-import banner from '../assets/banner.webp';
 import { LIBRARY } from '../materials/library';
 import type { Source } from '../materials/types';
 
@@ -37,7 +36,6 @@ export function AboutPage() {
   return (
     <main className="about">
       <article>
-        <img className="banner" src={banner} alt="" />
         <h1>About</h1>
         <p className="lead">
           A waveguide mode solver that runs in your browser. Describe a cross-section, press Run, and get the guided modes: effective
