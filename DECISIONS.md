@@ -172,3 +172,7 @@ Any non-graded shape (including full-width layers) can carry `gradient: { from, 
 - New gradients start at Δn = 0.01, exponential from the top, with L a quarter of the shape's height (50 nm to 1 µm). These are placeholders for the user's own values, not data for any process.
 - The earlier free-standing "Graded index" object (2D Gaussian / erf-stripe) is kept.
 - No analytic benchmark yet for graded profiles (an exponential-profile planar guide has a Bessel-function solution): the tests check the rasterised values, guidance above the host index, and monotonic strengthening with Δn.
+
+## 2026-10-11 — Maintainer: Viridis by default, cream oxide
+- The |E|² colour scheme defaults to Viridis (was Sunset). A scheme the user has already picked in their browser is kept.
+- SiO₂'s default colour is a pale cream (#f5eedc) instead of pale blue, since it is the background in most templates. LiNbO₃'s amber was deepened (#e6c283) and air lightened (#fdfcf9) so the three stay distinguishable. A background of another material keeps that material's colour: the colour belongs to the material, not to the background role.

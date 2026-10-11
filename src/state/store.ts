@@ -81,7 +81,7 @@ export const useStore = create<State>((set, get) => ({
   future: [],
   lastEdit: null,
   selection: null,
-  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, colormap: loadPref('colormap', 'sunset'), showContour: false, showProfiles: true, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
+  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, colormap: loadPref('colormap', 'viridis'), showContour: false, showProfiles: true, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
   notice: null,
   viewEpoch: 0,
 

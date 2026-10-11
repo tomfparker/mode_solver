@@ -5,11 +5,11 @@ import type { Project } from '../geometry/types';
 
 /** Soft defaults for the library materials, chosen to stay readable under the field overlay. */
 export const DEFAULT_MATERIAL_COLORS: Record<string, string> = {
-  SiO2: '#cfd8e6',
+  SiO2: '#f5eedc',
   Si: '#8b8fa8',
   Si3N4: '#a9cdb9',
-  LiNbO3: '#f0d9a0',
-  Air: '#fbfaf6',
+  LiNbO3: '#e6c283',
+  Air: '#fdfcf9',
 };
 
 /** Defaults for anything else (custom materials), assigned in order of first use. */

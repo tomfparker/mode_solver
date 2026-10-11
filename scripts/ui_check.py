@@ -225,9 +225,10 @@ try:
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
 
     # Colours: the mode's colour scheme, and a per-material colour
-    Select(d.find_element(By.ID, "colormap")).select_by_value("viridis")
-    ok("the mode colour scheme can be changed", Select(d.find_element(By.ID, "colormap")).first_selected_option.text == "Viridis")
+    ok("the mode colour scheme defaults to Viridis", Select(d.find_element(By.ID, "colormap")).first_selected_option.text == "Viridis")
     Select(d.find_element(By.ID, "colormap")).select_by_value("sunset")
+    ok("the mode colour scheme can be changed", Select(d.find_element(By.ID, "colormap")).first_selected_option.text == "Sunset")
+    Select(d.find_element(By.ID, "colormap")).select_by_value("viridis")
     d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
     sw = lambda: d.execute_script("return getComputedStyle(document.querySelector(\"div[role='listitem'].selected .swatch\")).backgroundColor")
     before = wait(lambda: sw())

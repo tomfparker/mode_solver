@@ -29,7 +29,7 @@ export const COLORMAPS = {
 } satisfies Record<string, { label: string; stops: RGB[] }>;
 
 export type Colormap = keyof typeof COLORMAPS;
-export const DEFAULT_COLORMAP: Colormap = 'sunset';
+export const DEFAULT_COLORMAP: Colormap = 'viridis';
 
 // Diverging arms for signed components: blue (negative) and red (positive), light → dark.
 const NEG = rgb(['#9ec5f4', '#3987e5', '#184f95']);
