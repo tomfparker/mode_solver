@@ -235,6 +235,20 @@ try:
     ok("picking a material colour recolours it", wait(lambda: sw() != before), f"{before} → {sw()}")
     d.find_element(By.XPATH, "//span[@class='colour-row']//button[text()='Reset']").click()
     ok("Reset restores the default colour", wait(lambda: sw() == before), sw())
+    # Index gradient across a shape
+    d.find_element(By.CSS_SELECTOR, "input[aria-label='Index gradient']").click()
+    ok("ticking Index gradient shows its controls and shades the shape", wait(lambda: d.find_elements(By.CSS_SELECTOR, "select[aria-label='Gradient function']"))
+       and len(d.find_elements(By.CSS_SELECTOR, "svg linearGradient")) == 1)
+    Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Gradient function']")).select_by_value("erfc")
+    Select(d.find_element(By.CSS_SELECTOR, "select[aria-label='Gradient starts from']")).select_by_value("left")
+    gl = d.find_element(By.CSS_SELECTOR, "input[aria-label='Gradient length']")
+    gl.send_keys(Keys.CONTROL, "a"); gl.send_keys("300 nm", Keys.ENTER)
+    ok("gradient settings are editable", wait(lambda: gl.get_attribute("value") == "300") and status() == "Out of date", gl.get_attribute("value"))
+    click_solve()
+    ok("a shape with a gradient solves", wait(lambda: status() == "Preview (mock)"), status())
+    d.find_element(By.CSS_SELECTOR, "input[aria-label='Index gradient']").click()
+    ok("unticking removes the gradient", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "svg linearGradient")))
+    d.find_element(By.CSS_SELECTOR, ".panel-right").click()
     ActionChains(d).send_keys(Keys.ESCAPE).perform()
 
     # About page

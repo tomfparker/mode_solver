@@ -79,6 +79,30 @@ def graded_delta_n(f, X, Y):
     return f["deltaN"] * fx * g
 
 
+def gradient_profile(profile, d, length):
+    """Profile value in [0, 1] at distance d (clipped at 0) into a shape; mirrors geometry.ts."""
+    t = np.maximum(d, 0.0) / length
+    if profile == "exponential":
+        return np.exp(-t)
+    if profile == "gaussian":
+        return np.exp(-t * t)
+    if profile == "erfc":
+        return 1 - erf(t)
+    if profile == "linear":
+        return np.maximum(0.0, 1 - t)
+    raise ValueError(f"unknown gradient profile {profile!r}")
+
+
+def shape_gradient(f, X, Y):
+    """Δn from a shape's own index gradient at points (X, Y) inside it (0 without a gradient)."""
+    g = f.get("gradient")
+    if not g:
+        return 0.0
+    x0, x1, y0, y1 = _bbox(f)
+    d = {"top": lambda: y1 - Y, "bottom": lambda: Y - y0, "left": lambda: X - x0, "right": lambda: x1 - X}[g["from"]]()
+    return g["deltaN"] * gradient_profile(g["profile"], d, g["length"])
+
+
 def _bbox(f):
     """Bounding box (x0, x1, y0, y1) of a non-graded shape; infinite in x for full-width layers."""
     k = f["kind"]
@@ -124,7 +148,8 @@ def index_fields(project, xs, ys):
             continue
         X, Y = np.meshgrid(xs[i0:i1], ys[j0:j1])
         mask = shape_mask(f, X, Y)
-        dn = f.get("deltaN") or 0.0
+        dn = (f.get("deltaN") or 0.0) + shape_gradient(f, X, Y)
+        dn = dn[mask] if isinstance(dn, np.ndarray) else dn
         for a in range(3):
             n[a][j0:j1, i0:i1][mask] = cast(tensor[a]) + dn
     graded = [f for f in project["features"] if f["kind"] == "graded"]

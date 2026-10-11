@@ -1,10 +1,11 @@
 import { compressToEncodedURIComponent } from 'lz-string';
 import { describe, expect, it } from 'vitest';
 import { decodeHash } from '../state/url';
-import { autoDomain, indexAtPoint, isAutoWindow, materialAt, solveDomain, structureBox } from './geometry';
+import check from '../../solver_py/tests/reference/gradient_check.json';
+import { autoDomain, gradientProfile, indexAtPoint, isAutoWindow, materialAt, solveDomain, structureBox } from './geometry';
 import { MIGRATED_SUBSTRATE_DEPTH } from './schema';
 import { buildTemplate } from './templates';
-import type { Project, RectFeature } from './types';
+import type { IndexGradient, Project, RectFeature } from './types';
 
 describe('background + shapes', () => {
   const p = buildTemplate('sin-strip');
@@ -112,5 +113,34 @@ describe('simulation window', () => {
     expect(autoDomain(ridge).y0).toBeLessThan(-0.3);
     const sin = buildTemplate('sin-strip'); // substrate at −4 µm is beyond the padding anyway
     expect(autoDomain(sin).y0).toBeGreaterThan(-4);
+  });
+});
+
+describe('index gradient on a shape', () => {
+  it('agrees with the Python rasteriser on every profile (shared check file)', () => {
+    expect(check.values.length).toBeGreaterThan(40);
+    for (const v of check.values) {
+      // erf here is a 1.5e-7 approximation; the others are exact.
+      expect(gradientProfile(v.profile as IndexGradient['profile'], v.d, v.length)).toBeCloseTo(v.value, 6);
+    }
+  });
+
+  it('adds Δn inside the shape only, decaying from the chosen edge', () => {
+    const p = buildTemplate('sin-strip');
+    const core = p.features.find((f) => f.name === 'Core') as RectFeature; // y 0 → 0.8
+    const n0 = indexAtPoint(p, 0, 0.79);
+    core.gradient = { from: 'top', profile: 'exponential', deltaN: 0.02, length: 0.2 };
+    expect(indexAtPoint(p, 0, 0.8 - 1e-9) - n0).toBeCloseTo(0.02, 6);
+    expect(indexAtPoint(p, 0, 0.6) - n0).toBeCloseTo(0.02 * Math.exp(-1), 6);
+    expect(indexAtPoint(p, 0, 0.9)).toBeCloseTo(indexAtPoint(buildTemplate('sin-strip'), 0, 0.9), 12); // outside: unchanged
+    core.gradient.from = 'left';
+    expect(indexAtPoint(p, -0.6 + 1e-9, 0.4) - n0).toBeCloseTo(0.02, 6);
+  });
+
+  it('survives the share link', () => {
+    const p = buildTemplate('sin-strip');
+    (p.features[2] as RectFeature).gradient = { from: 'bottom', profile: 'erfc', deltaN: -0.01, length: 1.5 };
+    const r = decodeHash('#p=' + compressToEncodedURIComponent(JSON.stringify(p)));
+    expect(r.ok === true && (r.project.features[2] as RectFeature).gradient).toEqual({ from: 'bottom', profile: 'erfc', deltaN: -0.01, length: 1.5 });
   });
 });

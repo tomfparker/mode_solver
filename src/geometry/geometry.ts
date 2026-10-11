@@ -2,7 +2,7 @@
 
 import { indexAt, maxIndexAt } from '../materials/library';
 import type { Axis } from '../materials/types';
-import type { Feature, GradedFeature, MaterialUse, Project, RectFeature, ShapeFeature } from './types';
+import type { Feature, GradedFeature, IndexGradient, MaterialUse, Project, RectFeature, ShapeFeature } from './types';
 
 export interface Box {
   x0: number;
@@ -184,6 +184,26 @@ export function gradedDeltaN(f: GradedFeature, x: number, y: number): number {
   return f.deltaN * fx * Math.exp(-((v / f.wy) ** 2));
 }
 
+/** Profile value in [0, 1] at distance d (≥ 0) into the shape, for characteristic length L. */
+export function gradientProfile(profile: IndexGradient['profile'], d: number, L: number): number {
+  const t = Math.max(d, 0) / L;
+  switch (profile) {
+    case 'exponential': return Math.exp(-t);
+    case 'gaussian': return Math.exp(-t * t);
+    case 'erfc': return 1 - erf(t);
+    case 'linear': return Math.max(0, 1 - t);
+  }
+}
+
+/** Δn from a shape's own index gradient at (x, y) (0 if it has none). Assumes the point is inside the shape. */
+export function shapeGradientDeltaN(f: ShapeFeature, x: number, y: number): number {
+  const g = f.gradient;
+  if (!g) return 0;
+  const b = featureBox(f);
+  const d = g.from === 'top' ? b.y1 - y : g.from === 'bottom' ? y - b.y0 : g.from === 'left' ? x - b.x0 : b.x1 - x;
+  return g.deltaN * gradientProfile(g.profile, d, g.length);
+}
+
 /** The material (and Δn) occupying a point, ignoring graded features: the topmost shape there. */
 export function materialAt(p: Project, x: number, y: number): { use: MaterialUse; deltaN: number; owner: string } {
   let use: MaterialUse = p.background;
@@ -193,7 +213,7 @@ export function materialAt(p: Project, x: number, y: number): { use: MaterialUse
     if (f.kind !== 'graded' && insideShape(f, x, y)) {
       use = f;
       owner = f.id;
-      deltaN = f.deltaN ?? 0;
+      deltaN = (f.deltaN ?? 0) + shapeGradientDeltaN(f, x, y);
     }
   }
   return { use, deltaN, owner };
@@ -222,7 +242,8 @@ export function maxIndex(p: Project): number {
       const host = materialAt(p, f.x, f.y - 1e-6).use;
       n = Math.max(n, maxIndexAt(host.material, p.wavelength, p.customMaterials) + Math.max(f.deltaN, 0));
     } else {
-      n = Math.max(n, maxIndexAt(f.material, p.wavelength, p.customMaterials) + Math.max(f.deltaN ?? 0, 0));
+      const dn = (f.deltaN ?? 0) + Math.max(f.gradient?.deltaN ?? 0, 0);
+      n = Math.max(n, maxIndexAt(f.material, p.wavelength, p.customMaterials) + Math.max(dn, 0));
     }
   }
   return n;

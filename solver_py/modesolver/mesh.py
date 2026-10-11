@@ -68,9 +68,11 @@ def _graded_axis(lo, hi, breakpoints, regions, d_max, growth):
 
 
 def _n_max(project, use):
+    """Largest index a region reaches, including a positive Δn and index gradient."""
     lam = project["wavelength"]
     n = index_tensor(use["material"], lam, project.get("customMaterials", []), use.get("opticAxis") or "z")
-    return max(c.real for c in n) + (use.get("deltaN") or 0.0)
+    grad = (use.get("gradient") or {}).get("deltaN", 0.0)
+    return max(c.real for c in n) + (use.get("deltaN") or 0.0) + max(grad, 0.0)
 
 
 def graded_lines(project, window, cells_per_decay_length=None, margin=None, growth=None, d_max=None, scale=1.0):
@@ -119,6 +121,18 @@ def graded_lines(project, window, cells_per_decay_length=None, margin=None, grow
             if f.get("fullWidth"):
                 # A layer: fine cells around its two surfaces; thin layers are covered throughout.
                 ry += [region(n, ya, ya, f["height"]), region(n, yb, yb, f["height"])]
+                g = f.get("gradient")
+                if g and g["from"] in ("top", "bottom"):
+                    # Resolve the graded zone over 4 characteristic lengths. Inside the layer the
+                    # field is governed by the gradient's own index step (not the contrast with
+                    # the lowest index in the structure), so size cells from that and from L.
+                    span = min(4 * g["length"], f["height"])
+                    lo, hi = (yb - span, yb) if g["from"] == "top" else (ya, ya + span)
+                    n_host = n - max(g["deltaN"], 0.0)
+                    step2 = n * n - n_host * n_host
+                    decay = lam / (2 * np.pi * np.sqrt(step2)) if step2 > 1e-9 else np.inf
+                    d = min(g["length"] / 4, decay / npl, d_max / scale)
+                    ry.append((lo, hi, max(d * scale, floor)))
                 continue
             xa, xb = f["x"] - f["width"] / 2, f["x"] + f["width"] / 2
             bx += [xa, xb]
@@ -140,6 +154,8 @@ def graded_lines(project, window, cells_per_decay_length=None, margin=None, grow
             bx += xs
             by += ys
             dims = (xb - xa, yb - ya)
+        if f.get("gradient"):
+            dims = (*dims, 1.5 * f["gradient"]["length"])  # ~4 cells per characteristic length
         rx.append(region(n, xa, xb, *dims))
         ry.append(region(n, ya, yb, *dims))
     xl = _graded_axis(x0, x1, bx, rx, d_max, growth)

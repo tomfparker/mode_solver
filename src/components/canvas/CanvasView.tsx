@@ -2,7 +2,7 @@
 // writes the same store fields the numeric inputs edit.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { featureBox, gradedExtent, indexAtPoint, isFullWidth, shapePolygon, solveDomain, uid } from '../../geometry/geometry';
+import { featureBox, gradedExtent, gradientProfile, indexAtPoint, isFullWidth, shapePolygon, solveDomain, uid } from '../../geometry/geometry';
 import type { Feature, MaterialUse, Project } from '../../geometry/types';
 import { materialFill } from '../../materials/colors';
 import { materialInfo } from '../../materials/library';
@@ -368,9 +368,32 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
         {/* Background fills the plane */}
         <rect x={0} y={0} width={W} height={size.h} fill={fillFor(project, project.background)} />
 
-        {/* Shape fills, bottom → top */}
+        {/* Shape fills, bottom → top. An index gradient is shown as shading that follows its profile. */}
+        <defs>
+          {project.features.map((f) => {
+            if (f.kind === 'graded' || !f.gradient) return null;
+            const g = f.gradient;
+            // Gradient vector from the starting edge (offset 0) to the far edge (offset 1) of the bounding box.
+            const [x1, y1, x2, y2] = g.from === 'top' ? [0, 0, 0, 1] : g.from === 'bottom' ? [0, 1, 0, 0] : g.from === 'left' ? [0, 0, 1, 0] : [1, 0, 0, 0];
+            const b = featureBox(f);
+            const span = g.from === 'top' || g.from === 'bottom' ? b.y1 - b.y0 : isFullWidth(f) ? 1 : b.x1 - b.x0;
+            return (
+              <linearGradient key={f.id} id={`grad-${f.id}`} x1={x1} y1={y1} x2={x2} y2={y2}>
+                {/* Stops bunched towards the starting edge, where the profile changes fastest. */}
+                {Array.from({ length: 12 }, (_, k) => (k / 11) ** 2).map((t) => (
+                  <stop key={t} offset={t} stopColor="var(--art-blue)" stopOpacity={0.6 * gradientProfile(g.profile, t * span, g.length)} />
+                ))}
+              </linearGradient>
+            );
+          })}
+        </defs>
         {project.features.map((f) =>
-          f.kind === 'graded' ? null : <g key={f.id}>{featureShape(f, { fill: fillFor(project, f, f.deltaN ?? 0), stroke: 'none' })}</g>,
+          f.kind === 'graded' ? null : (
+            <g key={f.id}>
+              {featureShape(f, { fill: fillFor(project, f, f.deltaN ?? 0), stroke: 'none' })}
+              {f.gradient && featureShape(f, { fill: `url(#grad-${f.id})`, stroke: 'none', pointerEvents: 'none' })}
+            </g>
+          ),
         )}
 
         {/* Field */}

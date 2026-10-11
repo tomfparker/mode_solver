@@ -91,8 +91,8 @@ export function computeWarnings(p: Project, result: SolveResult | null): Warning
       tone: 'warn',
       text:
         `${wallModes} of the ${result.modes.length} modes found live against the window walls (marked ✕), not in your waveguide. ` +
-        'This happens when the window cuts through a high-index region such as a substrate or slab. ' +
-        (guided.length === 0 ? 'Shrink the window so it stops short of that region, then run again.' : 'Raise “Modes” to find more guided ones, or shrink the window.'),
+        'This happens when the window cuts through a high-index region such as a substrate or slab, or when nothing confines the light sideways (a planar layer). ' +
+        (guided.length === 0 ? 'Shrink the window so it stops short of that region, or add a shape that confines the mode laterally, then run again.' : 'Raise “Modes” to find more guided ones, or shrink the window.'),
     });
   }
   if (guided.length === 0 && !(wallModes > 0 && !result.isMock)) {

@@ -26,6 +26,23 @@ interface ShapeBase extends MaterialUse {
   deltaN?: number;
   /** True while deltaN is a template's example value the user hasn't replaced yet. */
   deltaNIsExample?: boolean;
+  /** Optional index gradient across the shape (diffused / exchanged regions). */
+  gradient?: IndexGradient;
+}
+
+/**
+ * An index change that varies across a shape along one axis, added to the shape's own index.
+ * With d = distance into the shape from the chosen edge of its bounding box and L = `length`:
+ *   exponential  Δn·exp(−d/L)          gaussian  Δn·exp(−(d/L)²)
+ *   erfc         Δn·erfc(d/L)          linear    Δn·max(0, 1 − d/L)
+ */
+export interface IndexGradient {
+  from: 'top' | 'bottom' | 'left' | 'right';
+  profile: 'exponential' | 'gaussian' | 'erfc' | 'linear';
+  /** Index change at the starting edge. */
+  deltaN: number;
+  /** Characteristic length L, µm. */
+  length: number;
 }
 
 /** Rectangle. (x, y) = bottom-centre. With fullWidth it spans the whole plane horizontally (a layer). */

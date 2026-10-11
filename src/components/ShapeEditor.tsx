@@ -1,7 +1,7 @@
 // Pop-up editor for the selected shape (or the background), shown beside it on the canvas.
 
-import { isFullWidth } from '../geometry/geometry';
-import type { Feature } from '../geometry/types';
+import { featureBox, isFullWidth } from '../geometry/geometry';
+import type { Feature, IndexGradient, ShapeFeature } from '../geometry/types';
 import { materialColor } from '../materials/colors';
 import { indexSummary } from '../materials/display';
 import { materialInfo } from '../materials/library';
@@ -37,6 +37,69 @@ export function ShapeEditor() {
           />
           <MaterialColour material={project.background.material} />
           <span className="hint" style={{ gridColumn: '1 / -1' }}>Fills the whole plane wherever there is no shape (usually the cladding).</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PROFILE_LABEL: Record<IndexGradient['profile'], string> = {
+  exponential: 'Exponential: Δn·exp(−d/L)',
+  gaussian: 'Gaussian: Δn·exp(−(d/L)²)',
+  erfc: 'Error function: Δn·erfc(d/L)',
+  linear: 'Linear: Δn·(1 − d/L)',
+};
+
+/** Starting length for a new gradient: a quarter of the shape's height, kept between 50 nm and 1 µm. */
+function defaultGradientLength(f: ShapeFeature): number {
+  const b = featureBox(f);
+  return Math.round(Math.min(Math.max((b.y1 - b.y0) / 4, 0.05), 1) * 1000) / 1000;
+}
+
+/** Index gradient across a shape: an extra Δn varying from one edge, following a chosen function. */
+function GradientProps({ f }: { f: ShapeFeature }) {
+  const g = f.gradient;
+  const set = (patch: Partial<IndexGradient>, c?: string) => patchFeature(f.id, { gradient: { ...g!, ...patch } }, c);
+  // A full-width layer has no left or right edge to measure from.
+  const edges: IndexGradient['from'][] = isFullWidth(f) ? ['top', 'bottom'] : ['top', 'bottom', 'left', 'right'];
+  return (
+    <div className="gradient-box">
+      <label className="check" title="Add an index change that varies across this shape, e.g. a diffusion or exchange profile">
+        <input
+          type="checkbox"
+          checked={!!g}
+          onChange={(e) =>
+            patchFeature(f.id, {
+              gradient: e.target.checked ? { from: 'top', profile: 'exponential', deltaN: 0.01, length: defaultGradientLength(f) } : undefined,
+            })
+          }
+          aria-label="Index gradient"
+        />{' '}
+        Index gradient across this shape
+      </label>
+      {g && (
+        <div className="props" style={{ marginTop: 6 }}>
+          <label title="The edge of the shape the profile starts from (d = 0)">From</label>
+          <select className="field" value={edges.includes(g.from) ? g.from : 'top'} onChange={(e) => set({ from: e.target.value as IndexGradient['from'] })} aria-label="Gradient starts from">
+            {edges.map((e) => (
+              <option key={e} value={e}>
+                {e} edge
+              </option>
+            ))}
+          </select>
+          <label>Function</label>
+          <select className="field" value={g.profile} onChange={(e) => set({ profile: e.target.value as IndexGradient['profile'] })} aria-label="Gradient function">
+            {(Object.keys(PROFILE_LABEL) as IndexGradient['profile'][]).map((k) => (
+              <option key={k} value={k}>
+                {PROFILE_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <label title="Index change at the starting edge (d = 0), added to the shape’s index">Δn at edge</label>
+          <NumberField kind="plain" value={g.deltaN} step={0.0005} digits={5} onCommit={(v, c) => set({ deltaN: v }, c)} ariaLabel="Gradient index change at the edge" />
+          <label title="Characteristic length L of the function">Length L</label>
+          <NumberField value={g.length} min={0.001} onCommit={(v, c) => set({ length: v }, c)} ariaLabel="Gradient length" />
+          <span className="hint" style={{ gridColumn: '1 / -1' }}>d is the distance into the shape from that edge. Enter your own measured or fitted values.</span>
         </div>
       )}
     </div>
@@ -186,6 +249,8 @@ function FeatureProps({ f }: { f: Feature }) {
           </>
         )}
       </div>
+
+      {f.kind !== 'graded' && <GradientProps f={f} />}
 
       {f.kind === 'polygon' && <VertexTable f={f} />}
 

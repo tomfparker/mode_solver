@@ -170,3 +170,35 @@ def test_diffused_channel_guides_between_substrate_and_peak_index():
     # The mode sits just below the surface and is a few µm across.
     assert 3 < m["mfd"]["x"] < 15 and 1 < m["mfd"]["y"] < 10
     assert sum(res["timings_ms"].values()) < 5000
+
+
+# ---- Index gradient across a shape ---------------------------------------------------------
+
+def test_rasterised_gradient_matches_the_profile_function():
+    from modesolver.raster import gradient_profile, index_fields
+
+    core = rect("custom:host", 0, -4, 6, 4, gradient={"from": "top", "profile": "exponential", "deltaN": 0.02, "length": 1.0})
+    p = project(LAM, "custom:host", [core], [custom("host", 2.0)])
+    ys = np.array([-5.0, -3.5, -2.0, -0.5, -1e-9, 0.5])
+    n = index_fields(p, np.array([0.0]), ys)[0][:, 0]
+    want = 2.0 + np.where((ys >= -4) & (ys < 0), 0.02 * gradient_profile("exponential", -ys, 1.0), 0.0)
+    assert np.allclose(n, want, atol=1e-12)
+
+
+@pytest.mark.parametrize("profile", ["exponential", "gaussian", "erfc", "linear"])
+def test_graded_layer_guides_and_strengthens_with_delta_n(profile):
+    """A surface layer with an index gradient from the top (exchanged / diffused planar guide)."""
+
+    def neff(dn):
+        layer = rect("custom:host", 0, -30, 1, 30, full_width=True, gradient={"from": "top", "profile": profile, "deltaN": dn, "length": 2.0})
+        p = project(LAM, "custom:air", [layer], [custom("host", 2.2), custom("air", 1.0)])
+        window = {"x0": -1.5e6, "x1": 1.5e6, "y0": -14.0, "y1": 2.0}
+        yl = np.linspace(-14, 2, 321)
+        res = solve_project(p, window, {"xl": np.array([-1.5e6, -0.5e6, 0.5e6, 1.5e6]), "yl": yl}, num_modes=2, kind="semivector-te")
+        return res["modes"][0]["neff"].real
+
+    # Δn large enough to be above cut-off for every profile (erfc and linear are the shallowest).
+    a, b = neff(0.03), neff(0.06)
+    assert 2.2 < a < 2.23
+    assert 2.2 < b < 2.26
+    assert b > a

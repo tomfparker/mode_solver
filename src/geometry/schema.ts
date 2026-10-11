@@ -11,11 +11,19 @@ const auto = <T extends z.ZodTypeAny>(t: T) => z.union([t, z.literal('auto')]);
 
 const materialUse = { material: z.string().min(1), opticAxis: axis.optional() };
 
+const gradient = z.object({
+  from: z.enum(['top', 'bottom', 'left', 'right']),
+  profile: z.enum(['exponential', 'gaussian', 'erfc', 'linear']),
+  deltaN: finite,
+  length: positive,
+});
+
 const shapeBase = {
   id: z.string(),
   name: z.string(),
   deltaN: finite.optional(),
   deltaNIsExample: z.boolean().optional(),
+  gradient: gradient.optional(),
   ...materialUse,
 };
 
