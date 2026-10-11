@@ -4,14 +4,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { featureBox, gradedExtent, indexAtPoint, isFullWidth, shapePolygon, solveDomain, uid } from '../../geometry/geometry';
 import type { Feature, MaterialUse, Project } from '../../geometry/types';
-import { maxIndexAt, materialInfo } from '../../materials/library';
+import { materialFill } from '../../materials/colors';
+import { materialInfo } from '../../materials/library';
 import { fmtIndex, fmtMfd } from '../../state/format';
 import { patchFeature, useStore, type FieldView } from '../../state/store';
 import { formatLength, toDisplay, UNIT_LABEL } from '../../state/units';
 import type { SolveResult } from '../../solver/types';
-import { geoFill } from '../geoFill';
 import { usePrefersDark } from '../usePrefersDark';
-import { e2Contour, fieldData, fieldDataUrl, profiles } from './fieldImage';
+import { COLORMAPS, DEFAULT_COLORMAP, e2Contour, fieldData, fieldDataUrl, profiles, type Colormap } from './fieldImage';
 import { ShapeEditor } from '../ShapeEditor';
 import { applyDrag, handlesFor, snapTargets, type SnapContext } from './handles';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt, type Size, type View } from './view';
@@ -38,7 +38,7 @@ const FIELD_VIEWS: { id: FieldView; label: string }[] = [
 ];
 
 function fillFor(p: Project, use: MaterialUse, deltaN = 0) {
-  return geoFill(maxIndexAt(use.material, p.wavelength, p.customMaterials) + deltaN);
+  return materialFill(p, use.material, deltaN);
 }
 
 function matName(p: Project, id: string) {
@@ -135,13 +135,14 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
   }, [size]);
 
   const dark = usePrefersDark();
+  const colormap: Colormap = ui.colormap in COLORMAPS ? (ui.colormap as Colormap) : DEFAULT_COLORMAP;
   const mode = result?.modes[Math.min(ui.selectedMode, (result?.modes.length ?? 1) - 1)];
   const image = useMemo(() => {
     if (!result || !mode) return null;
     const d = fieldData(mode, ui.fieldView);
     if (!d) return null;
-    return { url: fieldDataUrl(d, result.grid, undefined, dark), part: d.part };
-  }, [result, mode, ui.fieldView, dark]);
+    return { url: fieldDataUrl(d, result.grid, undefined, dark, colormap), part: d.part };
+  }, [result, mode, ui.fieldView, dark, colormap]);
   const contour = useMemo(() => (result && mode ? e2Contour(mode, result.grid) : []), [result, mode]);
   const prof = useMemo(
     () => (ui.showProfiles && result && mode ? profiles(mode, result.grid, ui.fieldView) : null),
@@ -305,6 +306,23 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
             ))}
           </select>
           {image?.part && <span className="limits">{image.part === 're' ? 'real part' : 'imag. part'}</span>}
+        </div>
+        <div className="line">
+          <label htmlFor="colormap">Colours</label>
+          <select
+            id="colormap"
+            className="field"
+            value={colormap}
+            onChange={(e) => setUi({ colormap: e.target.value })}
+            style={{ width: 'auto' }}
+            title="Colour scheme for |E|². Single components always use blue (−) and red (+)."
+          >
+            {(Object.keys(COLORMAPS) as Colormap[]).map((k) => (
+              <option key={k} value={k}>
+                {COLORMAPS[k].label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="line">
           <label htmlFor="opacity">Opacity</label>

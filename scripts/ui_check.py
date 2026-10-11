@@ -224,6 +224,19 @@ try:
     ok("unticking Profiles hides them", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "g.profiles")))
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
 
+    # Colours: the mode's colour scheme, and a per-material colour
+    Select(d.find_element(By.ID, "colormap")).select_by_value("viridis")
+    ok("the mode colour scheme can be changed", Select(d.find_element(By.ID, "colormap")).first_selected_option.text == "Viridis")
+    Select(d.find_element(By.ID, "colormap")).select_by_value("sunset")
+    d.find_element(By.XPATH, "//div[@role='listitem']//span[text()='Core']").click()
+    sw = lambda: d.execute_script("return getComputedStyle(document.querySelector(\"div[role='listitem'].selected .swatch\")).backgroundColor")
+    before = wait(lambda: sw())
+    d.execute_script("const i=document.querySelector(\"input[type='color']\"); const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; set.call(i,'#ff00aa'); i.dispatchEvent(new Event('input',{bubbles:true})); i.dispatchEvent(new Event('change',{bubbles:true}));")
+    ok("picking a material colour recolours it", wait(lambda: sw() != before), f"{before} → {sw()}")
+    d.find_element(By.XPATH, "//span[@class='colour-row']//button[text()='Reset']").click()
+    ok("Reset restores the default colour", wait(lambda: sw() == before), sw())
+    ActionChains(d).send_keys(Keys.ESCAPE).perform()
+
     # About page
     d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='About']").click()
     about = wait(lambda: d.find_element(By.CSS_SELECTOR, "main.about").text)

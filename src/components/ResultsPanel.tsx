@@ -8,7 +8,7 @@ import { SOLVER_KIND_LABELS } from '../solver/kinds';
 import { fmtArea, fmtIndex, fmtMfd, fmtPercent, fmtWavelengthNm } from '../state/format';
 import { useStore } from '../state/store';
 import type { ModeResult, SolveResult } from '../solver/types';
-import { fieldData, fieldDataUrl, modeCrop } from './canvas/fieldImage';
+import { COLORMAPS, DEFAULT_COLORMAP, fieldData, fieldDataUrl, modeCrop, type Colormap } from './canvas/fieldImage';
 import { usePrefersDark } from './usePrefersDark';
 
 interface Props {
@@ -165,11 +165,13 @@ function Warnings({ warnings }: { warnings: Warning[] }) {
 
 function Thumb({ mode, result, label, selected, onClick }: { mode: ModeResult; result: SolveResult; label: string; selected: boolean; onClick: () => void }) {
   const dark = usePrefersDark();
+  const stored = useStore((s) => s.ui.colormap);
+  const colormap: Colormap = stored in COLORMAPS ? (stored as Colormap) : DEFAULT_COLORMAP;
   const crop = useMemo(() => modeCrop(mode, result.grid), [mode, result]);
   const url = useMemo(() => {
     const d = fieldData(mode, 'E2');
-    return d ? fieldDataUrl(d, result.grid, crop, dark) : '';
-  }, [mode, result, crop, dark]);
+    return d ? fieldDataUrl(d, result.grid, crop, dark, colormap) : '';
+  }, [mode, result, crop, dark, colormap]);
   return (
     <button
       className={`thumb${selected ? ' selected' : ''}${mode.guided ? '' : ' unguided'}`}

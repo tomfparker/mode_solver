@@ -4,10 +4,10 @@
 import { useState, type DragEvent } from 'react';
 import { isFullWidth, uid } from '../geometry/geometry';
 import type { Feature, FeatureKind, MaterialUse, Project } from '../geometry/types';
-import { maxIndexAt, materialInfo } from '../materials/library';
+import { materialFill } from '../materials/colors';
+import { materialInfo } from '../materials/library';
 import { addFeature, addLayer, moveFeature, useStore } from '../state/store';
 import { formatLength } from '../state/units';
-import { geoFill } from './geoFill';
 import { NumberField, TextField } from './inputs';
 import { SimulationPanel } from './SimulationPanel';
 
@@ -28,9 +28,9 @@ function shortName(p: Project, id: string) {
   return materialName(p, id).replace(/\s*\(.*\)\s*$/, '');
 }
 
-function Swatch({ p, use }: { p: Project; use?: MaterialUse }) {
-  const n = use ? maxIndexAt(use.material, p.wavelength, p.customMaterials) : 1;
-  return <span className="swatch" style={{ background: use ? geoFill(n) : 'repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, transparent 3px 6px)' }} />;
+function Swatch({ p, use, deltaN }: { p: Project; use?: MaterialUse; deltaN?: number }) {
+  const background = use ? materialFill(p, use.material, deltaN) : 'repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, transparent 3px 6px)';
+  return <span className="swatch" style={{ background }} />;
 }
 
 function meta(p: Project, f: Feature, unit: 'nm' | 'um'): string {
@@ -107,7 +107,7 @@ export function StructurePanel() {
               onClick={() => open({ type: 'feature', id: f.id })}
               title={isFullWidth(f) ? 'Layer: spans the whole width' : KIND_LABEL[f.kind]}
             >
-              <Swatch p={project} use={f.kind === 'graded' ? undefined : f} />
+              <Swatch p={project} use={f.kind === 'graded' ? undefined : f} deltaN={f.kind === 'graded' ? 0 : f.deltaN} />
               <span className="name">
                 {isFullWidth(f) && <span className="layer-tag" aria-label="full-width layer">▭</span>}
                 {f.name}

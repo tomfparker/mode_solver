@@ -2,7 +2,9 @@
 
 import { isFullWidth } from '../geometry/geometry';
 import type { Feature } from '../geometry/types';
+import { materialColor } from '../materials/colors';
 import { indexSummary } from '../materials/display';
+import { materialInfo } from '../materials/library';
 import { deleteFeature, duplicateFeature, patchFeature, stepFeature, useStore } from '../state/store';
 import { MaterialSelect, NumberField, TextField } from './inputs';
 
@@ -33,10 +35,47 @@ export function ShapeEditor() {
             opticAxis={project.background.opticAxis}
             onChange={(material, opticAxis) => update((p) => void (p.background = { material, opticAxis }))}
           />
+          <MaterialColour material={project.background.material} />
           <span className="hint" style={{ gridColumn: '1 / -1' }}>Fills the whole plane wherever there is no shape (usually the cladding).</span>
         </div>
       )}
     </div>
+  );
+}
+
+/** Colour picker for a material. The colour belongs to the material, so every shape made of it changes. */
+function MaterialColour({ material }: { material: string }) {
+  const project = useStore((s) => s.project);
+  const update = useStore((s) => s.update);
+  const name = materialInfo(material, project.customMaterials)?.name ?? material;
+  const overridden = project.materialColors?.[material] !== undefined;
+  return (
+    <>
+      <label title={`Display colour of ${name} everywhere it is used`}>Colour</label>
+      <span className="colour-row">
+        <input
+          type="color"
+          value={materialColor(project, material)}
+          aria-label={`Colour of ${name}`}
+          onChange={(e) => update((p) => void (p.materialColors = { ...p.materialColors, [material]: e.target.value }), `colour-${material}`)}
+        />
+        <span className="limits">all {name.replace(/\s*\(.*\)\s*$/, '')}</span>
+        {overridden && (
+          <button
+            className="btn small ghost"
+            onClick={() =>
+              update((p) => {
+                const rest = { ...p.materialColors };
+                delete rest[material];
+                p.materialColors = Object.keys(rest).length ? rest : undefined;
+              })
+            }
+          >
+            Reset
+          </button>
+        )}
+      </span>
+    </>
   );
 }
 
@@ -59,6 +98,7 @@ function FeatureProps({ f }: { f: Feature }) {
           <>
             <label>Material</label>
             <MaterialSelect material={f.material} opticAxis={f.opticAxis} onChange={(material, opticAxis) => set({ material, opticAxis })} />
+            <MaterialColour material={f.material} />
             <label title="Index offset added to the material, e.g. a doped core">Δn</label>
             <NumberField
               kind="plain"

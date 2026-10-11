@@ -15,6 +15,8 @@ export interface UiState {
   lengthUnit: LengthUnit;
   fieldView: FieldView;
   fieldOpacity: number;
+  /** Colour map for the |E|² view (id from fieldImage.COLORMAPS). Remembered between visits. */
+  colormap: string;
   showContour: boolean;
   /** Marginal profiles and peak cuts along the canvas edges. */
   showProfiles: boolean;
@@ -57,6 +59,14 @@ interface State {
   dismissNotice: () => void;
 }
 
+function loadPref(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function loadUnit(): LengthUnit {
   try {
     return localStorage.getItem('lengthUnit') === 'um' ? 'um' : 'nm';
@@ -71,7 +81,7 @@ export const useStore = create<State>((set, get) => ({
   future: [],
   lastEdit: null,
   selection: null,
-  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, showContour: false, showProfiles: true, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
+  ui: { lengthUnit: loadUnit(), fieldView: 'E2', fieldOpacity: 0.85, colormap: loadPref('colormap', 'sunset'), showContour: false, showProfiles: true, selectedMode: 0, advancedOpen: false, editorOpen: false, page: 'solver' },
   notice: null,
   viewEpoch: 0,
 
@@ -121,6 +131,13 @@ export const useStore = create<State>((set, get) => ({
     if (patch.lengthUnit) {
       try {
         localStorage.setItem('lengthUnit', patch.lengthUnit);
+      } catch {
+        /* storage unavailable: preference just isn't remembered */
+      }
+    }
+    if (patch.colormap) {
+      try {
+        localStorage.setItem('colormap', patch.colormap);
       } catch {
         /* storage unavailable: preference just isn't remembered */
       }

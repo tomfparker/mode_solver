@@ -1,33 +1,54 @@
 // Field → image and 1/e² contour.
-// Colour rules (dataviz skill): |E|² is magnitude → single-hue blue ramp, light → dark, with
+// Colour rules: |E|² is a magnitude, shown on a sequential colour map the user picks, with
 // near-zero fading to transparent so the geometry underneath stays readable. Signed components
 // are polarity → diverging blue (−) / red (+) with a neutral (transparent) zero.
 
 import { contours } from 'd3-contour';
+import { interpolateGreys, interpolateMagma, interpolateViridis } from 'd3-scale-chromatic';
 import type { FieldView } from '../../state/store';
 import type { FieldGrid, ModeResult } from '../../solver/types';
 
-// Sequential blue ramp, steps 100 → 700 of the reference palette.
-const BLUE = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
-// Diverging arms: blue (negative) and red (positive), light → dark.
-const NEG = ['#9ec5f4', '#3987e5', '#184f95'];
-const POS = ['#f2a7a6', '#e34948', '#a8302f'];
+type RGB = [number, number, number];
 
-function hex(c: string): [number, number, number] {
-  return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+function parseColour(c: string): RGB {
+  if (c.startsWith('#')) return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const m = c.match(/\d+/g)!;
+  return [Number(m[0]), Number(m[1]), Number(m[2])];
 }
-const rgb = (ramp: string[]) => ramp.map(hex);
-// Dark surfaces get their own order: magnitude runs dark → light so the peak stays brightest.
-const RAMPS = {
-  light: { seq: rgb(BLUE), neg: rgb(NEG), pos: rgb(POS) },
-  dark: { seq: rgb([...BLUE].reverse()), neg: rgb([...NEG].reverse()), pos: rgb([...POS].reverse()) },
-};
+const rgb = (stops: string[]) => stops.map(parseColour);
+const sample = (f: (t: number) => string, lo = 0, hi = 1, n = 9) =>
+  Array.from({ length: n }, (_, k) => parseColour(f(lo + ((hi - lo) * k) / (n - 1))));
+
+/** Sequential colour maps for |E|². Each is listed light → dark. */
+export const COLORMAPS = {
+  sunset: { label: 'Sunset', stops: rgb(['#f8dc93', '#f6c96b', '#ee9450', '#dd5b41', '#c22f28', '#8e1e1c', '#571110']) },
+  blue: { label: 'Blue', stops: rgb(['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b']) },
+  viridis: { label: 'Viridis', stops: sample(interpolateViridis).reverse() },
+  magma: { label: 'Magma', stops: sample(interpolateMagma, 0.1, 0.95).reverse() },
+  grey: { label: 'Grey', stops: sample(interpolateGreys, 0.2, 1) },
+} satisfies Record<string, { label: string; stops: RGB[] }>;
+
+export type Colormap = keyof typeof COLORMAPS;
+export const DEFAULT_COLORMAP: Colormap = 'sunset';
+
+// Diverging arms for signed components: blue (negative) and red (positive), light → dark.
+const NEG = rgb(['#9ec5f4', '#3987e5', '#184f95']);
+const POS = rgb(['#f2a7a6', '#e34948', '#a8302f']);
+
+/**
+ * Ramps oriented for the surface: on a light page low values are light and the peak is dark;
+ * on a dark page the order is reversed so the peak stays the most prominent.
+ */
+function ramps(map: Colormap, dark: boolean) {
+  const seq = COLORMAPS[map].stops;
+  return dark ? { seq: [...seq].reverse(), neg: [...NEG].reverse(), pos: [...POS].reverse() } : { seq, neg: NEG, pos: POS };
+}
 
 export function prefersDark(): boolean {
   return typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function ramp(stops: [number, number, number][], t: number): [number, number, number] {
+function ramp(stops: RGB[], t: number): RGB {
   const u = Math.min(Math.max(t, 0), 1) * (stops.length - 1);
   const i = Math.min(Math.floor(u), stops.length - 2);
   const f = u - i;
@@ -110,8 +131,9 @@ export function fieldDataUrl(
   g: FieldGrid,
   crop: Crop = { i0: 0, i1: g.nx, j0: 0, j1: g.ny },
   dark = prefersDark(),
+  colormap: Colormap = DEFAULT_COLORMAP,
 ): string {
-  const R = RAMPS[dark ? 'dark' : 'light'];
+  const R = ramps(colormap, dark);
   const w = crop.i1 - crop.i0;
   const h = crop.j1 - crop.j0;
   const c = document.createElement('canvas');

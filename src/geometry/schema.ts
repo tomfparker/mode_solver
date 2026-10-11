@@ -52,6 +52,7 @@ export const projectSchema = z.object({
   background: z.object(materialUse),
   features: z.array(feature),
   customMaterials: z.array(z.object({ id: z.string().startsWith('custom:'), name: z.string(), n: positive, k: nonneg })),
+  materialColors: z.record(z.string(), z.string().regex(/^#[0-9a-fA-F]{6}$/)).optional(),
   settings: z.object({
     window: auto(
       z

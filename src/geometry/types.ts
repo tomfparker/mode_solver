@@ -131,5 +131,7 @@ export interface Project {
   /** Bottom → top: later shapes are drawn over (and replace) earlier ones. */
   features: Feature[];
   customMaterials: CustomMaterial[];
+  /** Display colour overrides by material id ("#rrggbb"). Absent entries use the defaults. */
+  materialColors?: Record<string, string>;
   settings: SolverSettings;
 }

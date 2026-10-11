@@ -562,3 +562,76 @@ table.modes td, .about td { border-bottom-color: rgb(20 18 16 / 0.18); }
 .loading-screen h1, .loading-screen .detail { text-shadow: 0 1px 8px rgb(0 0 0 / 0.5); }
 .loading-screen .bar span { background: rgb(255 255 255 / 0.22); }
 .loading-screen .btn { border-color: rgb(255 255 255 / 0.8); }
+
+/* ==== Softer still (maintainer, 2026-10-11) ================================================
+   Lighter hairline rules, rounder corners, lighter heading weight, and the artwork's muted blue
+   in place of near-black for filled controls. */
+:root {
+  --radius: 7px;
+  --border: rgb(30 27 24 / 0.2);
+  --border-strong: rgb(30 27 24 / 0.3);
+  --text: #2a2826;
+  --text-2: #45423e;
+  --text-3: #7a766f;
+  --accent: var(--art-blue);
+  --accent-soft: rgb(246 201 107 / 0.38);
+  --warn-bg: rgb(246 201 107 / 0.3);
+  --warn-border: rgb(190 140 40 / 0.4);
+  --geo-stroke: rgb(30 27 24 / 0.55);
+  --geo-dim: 0%;
+  --display: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --shadow: 0 8px 28px rgb(30 27 24 / 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --border: rgb(255 255 255 / 0.18);
+    --border-strong: rgb(255 255 255 / 0.3);
+    --text: #e4e1da;
+    --accent: #8f9bd0;
+    --accent-soft: rgb(143 155 208 / 0.28);
+    --geo-stroke: rgb(255 255 255 / 0.55);
+    --geo-dim: 42%;
+  }
+}
+
+.topbar, .panel-left, .panel-right { border-width: 1px; }
+.section-title, .about h2, .editor-head b { font-weight: 700; letter-spacing: 0.07em; font-size: 11.5px; color: var(--text-2); }
+.brand { font-weight: 800; letter-spacing: 0.03em; }
+.about h1 { font-weight: 800; font-size: 38px; letter-spacing: 0; text-transform: none; }
+.about h2 { border-top-width: 1px; font-size: 12.5px; }
+.about .lead { font-weight: 600; }
+.about .banner { border: 0; border-radius: calc(var(--radius) * 1.5); opacity: 1; }
+
+.btn { border-width: 1px; font-weight: 500; }
+.btn.primary, .btn.solve { background: var(--accent); color: #fff; text-transform: none; letter-spacing: 0.02em; font-weight: 600; }
+.btn.primary:hover:not(:disabled), .btn.solve:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 82%, #000); color: #fff; }
+.btn.solve.attention { background: var(--art-orange); box-shadow: 0 0 0 4px rgb(221 91 65 / 0.2); }
+.btn.solve.attention:hover:not(:disabled) { background: var(--art-red); }
+.seg, .wavelength, .status-chip { border-width: 1px; }
+.seg button + button { border-left-width: 1px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.wavelength input { border-bottom-width: 1px; }
+.status-chip { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text-2); }
+.status-chip .dot { border-radius: 50%; }
+.tabs button { text-transform: none; letter-spacing: 0.01em; font-weight: 600; }
+.field { border-color: var(--border-strong); border-radius: calc(var(--radius) - 2px); }
+.row .swatch { border-radius: 3px; border-color: var(--border-strong); }
+.row.selected { border-color: transparent; }
+.thumb .img { border-radius: calc(var(--radius) - 3px); }
+.thumb.selected { outline: 2px solid var(--accent); }
+
+table.modes th, .about th { background: transparent; color: var(--text-3); border-bottom: 1px solid var(--border-strong); font-weight: 600; }
+table.modes td, .about td { border-bottom-color: var(--border); }
+.hero .k, details.advanced summary { text-transform: none; letter-spacing: 0; }
+.warning .icon { font-weight: 700; }
+.updating { text-transform: none; letter-spacing: 0; background: rgb(246 201 107 / 0.8); }
+.mock-banner { background: rgb(221 91 65 / 0.72); }
+.handle { stroke-width: 1.75; }
+
+.loading-screen { background: rgb(22 18 18 / 0.42); backdrop-filter: blur(5px); }
+.loading-screen h1 { font-weight: 800; letter-spacing: 0.02em; text-transform: none; }
+.loading-screen .detail { text-transform: none; letter-spacing: 0.01em; font-size: 13.5px; }
+.loading-screen .bar { gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; }
+
+.colour-row { display: flex; align-items: center; gap: 8px; }
+.colour-row input[type='color'] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 5px; background: none; cursor: pointer; }
