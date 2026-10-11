@@ -1,6 +1,7 @@
 // Top bar: project name, the global wavelength control, templates, undo/redo, units, share.
 
 import { useState, type KeyboardEvent } from 'react';
+import disc from '../assets/disc.webp';
 import { TextField } from './inputs';
 import { TEMPLATES } from '../geometry/templates';
 import { useStore } from '../state/store';
@@ -112,7 +113,10 @@ export function TopBar({ status, mock, solving, outOfDate, onSolve, onCancel }: 
 
   return (
     <header className="topbar">
-      <span className="brand">Mode solver</span>
+      <span className="brand">
+        <img src={disc} alt="" />
+        Mode solver
+      </span>
       <nav className="tabs" aria-label="Pages">
         <button className={page === 'solver' ? 'on' : ''} onClick={() => setUi({ page: 'solver' })}>
           Solver

@@ -112,6 +112,8 @@ data/
 9. **Progressive disclosure:** the left-panel Simulation section shows the window and mode count; mesh, boundary conditions, solver type and n guess sit in its collapsed "Solver and mesh" part with good auto defaults.
 10. **Loss waterfall** for coupling: mode shape / magnification / NA clipping / Fresnel / total, each in dB and %.
 11. Desktop-first. It should not break on a tablet; phones are not a target.
+12. **Look: soft web-brutalism.** Monospace throughout, heavy uppercase headings, visible rules and blocky controls, with a softened finish: off-white surfaces, dark-grey (not pure black) ink, thin translucent borders, a 3 px radius, frosted translucent overlays and soft shadows. Accent colours come from the project artwork in `src/assets` (red, orange, yellow, green, blue). Tokens live at the top of `src/app/app.css`; change tokens before adding one-off colours.
+13. **Loading screen.** A translucent veil with the rotating disc (`src/assets/disc.webp`) covers the page while the solver loads, until the first result is shown. The same screen, with Cancel, covers any solve that has run for 5 s, or starts immediately if the previous solve took that long. The solver stays visible behind it.
 
 ## Data provenance — strict
 

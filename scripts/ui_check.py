@@ -227,9 +227,18 @@ try:
     # About page
     d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='About']").click()
     about = wait(lambda: d.find_element(By.CSS_SELECTOR, "main.about").text)
-    ok("About page shows method, benchmarks and references", about and all(k in about for k in ("How the solver works", "femwell", "Zhu", "Malitson")))
+    ok("About page shows method, benchmarks and references", about and all(k.lower() in about.lower() for k in ("How the solver works", "femwell", "Zhu", "Malitson")))
     d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='Solver']").click()
     ok("back to the solver, results still there", wait(lambda: neff0()))
+
+    # Loading screen: a translucent veil with the rotating disc, until the first real result
+    d.get("about:blank"); d.get(BASE)
+    ok("loading screen with the disc shows while the solver loads", wait(lambda: d.find_elements(By.CSS_SELECTOR, ".loading-screen img.disc"), 5))
+    ok("it covers the page and is translucent (the solver shows through)", d.execute_script(
+        "const e=document.querySelector('.loading-screen'); if(!e) return false; const c=getComputedStyle(e), r=e.getBoundingClientRect();"
+        "const m=c.backgroundColor.match(/rgba\\(.*,\\s*([0-9.]+)\\)/); const a=m?parseFloat(m[1]):1;"
+        "return a>0.3 && a<0.8 && r.width>=innerWidth && r.height>=innerHeight"))
+    ok("and goes away once the first result is in", wait(lambda: not d.find_elements(By.CSS_SELECTOR, ".loading-screen") and neff0(), 180))
 
     # Real solver, end to end: Pyodide loads, the default SiN strip solves, numbers are physical.
     d.get("about:blank"); d.get(BASE)
