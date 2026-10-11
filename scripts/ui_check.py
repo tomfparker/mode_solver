@@ -211,10 +211,18 @@ try:
     ok("no JS errors", not errors(), json.dumps(errors())[:300])
 
     # Profiles option: marginal and peak-cut strips on the canvas
+    ok("profiles are on by default, with rulers and MFD marks", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, "g.profiles > path")) == 6)
+       and len(d.find_elements(By.CSS_SELECTOR, "g.profiles .ruler-label")) > 6 and len(d.find_elements(By.CSS_SELECTOR, "g.mfd-mark")) == 2)
+    marks = d.execute_script("return [...document.querySelectorAll('g.mfd-mark text')].map(t => t.textContent)")
+    # The view is Ex at this point, so the marks give that component's 1/e² width (they say "MFD" for |E|²).
+    ok("width marks are labelled for the Ex view, in µm", len(marks) == 2 and marks[0].startswith("1/e² width x") and marks[0].endswith("µm"), " / ".join(marks))
+    Select(d.find_element(By.ID, "fieldview")).select_by_value("E2")
+    marks = d.execute_script("return [...document.querySelectorAll('g.mfd-mark text')].map(t => t.textContent)")
+    ok("and as MFD for the |E|² view", len(marks) == 2 and marks[0].startswith("MFD x") and marks[1].startswith("MFD y"), " / ".join(marks))
+    ok("1/e² contour is off by default", not d.find_element(By.XPATH, "//label[contains(., 'contour')]/input").is_selected())
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
-    ok("Profiles option draws the strips", wait(lambda: len(d.find_elements(By.CSS_SELECTOR, "g.profiles path")) == 6))
+    ok("unticking Profiles hides them", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "g.profiles")))
     d.find_element(By.XPATH, "//label[contains(., 'Profiles')]/input").click()
-    ok("and hides them again", wait(lambda: not d.find_elements(By.CSS_SELECTOR, "g.profiles")))
 
     # About page
     d.find_element(By.XPATH, "//nav[@class='tabs']/button[text()='About']").click()

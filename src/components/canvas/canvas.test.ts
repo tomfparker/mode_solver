@@ -3,7 +3,7 @@ import { buildTemplate } from '../../geometry/templates';
 import type { RectFeature, TrapezoidFeature } from '../../geometry/types';
 import { applyDrag, handlesFor, snap, snapTargets, type SnapContext } from './handles';
 import type { ModeResult } from '../../solver/types';
-import { profiles } from './fieldImage';
+import { e2Extent, profiles } from './fieldImage';
 import { fitView, niceStep, scaleBar, toPx, toUm, zoomAt } from './view';
 
 const size = { w: 800, h: 600 };
@@ -140,5 +140,20 @@ describe('profiles', () => {
   it('returns null for a component the mode does not have', () => {
     expect(profiles(mode, grid, 'Hz')).toBeNull();
   });
-});
 
+  it('marks the 1/e² width of the cut: 2w for a Gaussian of 1/e² intensity radius w', () => {
+    // I(x) = exp(−2x²/w²) with w = 3, sampled every 0.25.
+    const xs = Float64Array.from({ length: 81 }, (_, i) => (i - 40) * 0.25);
+    const cut = Float32Array.from(xs, (v) => Math.exp((-2 * v * v) / 9));
+    const [a, b] = e2Extent(cut, xs)!;
+    expect(b - a).toBeCloseTo(6, 1);
+    expect((a + b) / 2).toBeCloseTo(0, 6);
+    expect(e2Extent(new Float32Array(5), Float64Array.from([0, 1, 2, 3, 4]))).toBeNull();
+  });
+
+  it('reports the same widths through profiles()', () => {
+    const p = profiles(mode, grid, 'E2')!;
+    // |E|² ∝ exp(−2x²/16): 1/e² intensity radius 4 → width 8 (sampled every 1, so approximate).
+    expect(p.widthX![1] - p.widthX![0]).toBeCloseTo(8, 0);
+  });
+});

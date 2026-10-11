@@ -144,6 +144,33 @@ export interface Profiles {
   /** Cuts through the peak (row and column of the maximum), normalised to the peak. */
   cutX: Float32Array;
   cutY: Float32Array;
+  /** 1/e² extent of each cut: [start, end] coordinates in µm (outermost crossings), or null. */
+  widthX: [number, number] | null;
+  widthY: [number, number] | null;
+}
+
+/**
+ * Outermost points where a peak-normalised cut crosses 1/e² (linear interpolation between
+ * samples). Same definition as the solver's MFD (solver_py/modesolver/fd.py).
+ */
+export function e2Extent(cut: Float32Array, coords: Float64Array): [number, number] | null {
+  const level = Math.exp(-2);
+  let a = -1;
+  let b = -1;
+  for (let i = 0; i < cut.length; i++) {
+    if (cut[i] >= level) {
+      if (a < 0) a = i;
+      b = i;
+    }
+  }
+  if (a < 0) return null;
+  const half = (coords[1] - coords[0]) / 2;
+  const edge = (inside: number, outside: number) => {
+    if (outside < 0 || outside >= cut.length) return coords[inside] + (outside > inside ? half : -half);
+    const t = (cut[inside] - level) / (cut[inside] - cut[outside]);
+    return coords[inside] + t * (coords[outside] - coords[inside]);
+  };
+  return [edge(a, a - 1), edge(b, b + 1)];
 }
 
 /**
@@ -187,7 +214,10 @@ export function profiles(m: ModeResult, g: FieldGrid, view: FieldView): Profiles
   const cutY = new Float32Array(ny);
   for (let i = 0; i < nx; i++) cutX[i] = q[jp * nx + i] / peak;
   for (let j = 0; j < ny; j++) cutY[j] = q[j * nx + ip] / peak;
-  return { marginalX: norm(marginalX), marginalY: norm(marginalY), cutX, cutY };
+  return {
+    marginalX: norm(marginalX), marginalY: norm(marginalY), cutX, cutY,
+    widthX: e2Extent(cutX, g.x), widthY: e2Extent(cutY, g.y),
+  };
 }
 
 /** 1/e² intensity contour as polylines in absolute µm. */

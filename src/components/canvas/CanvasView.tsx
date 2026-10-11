@@ -5,9 +5,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { featureBox, gradedExtent, indexAtPoint, isFullWidth, shapePolygon, solveDomain, uid } from '../../geometry/geometry';
 import type { Feature, MaterialUse, Project } from '../../geometry/types';
 import { maxIndexAt, materialInfo } from '../../materials/library';
-import { fmtIndex } from '../../state/format';
+import { fmtIndex, fmtMfd } from '../../state/format';
 import { patchFeature, useStore, type FieldView } from '../../state/store';
-import { formatLength } from '../../state/units';
+import { formatLength, toDisplay, UNIT_LABEL } from '../../state/units';
 import type { SolveResult } from '../../solver/types';
 import { geoFill } from '../geoFill';
 import { usePrefersDark } from '../usePrefersDark';
@@ -25,7 +25,7 @@ type Drag =
 
 const CLICK_SLOP = 3; // px of movement before a press becomes a drag
 const PROFILE_PX = 72; // height of the profile strips
-const PROFILE_BASE = 44; // bottom strip's baseline above the canvas edge (clear of scale bar and readout)
+const PROFILE_BASE = 62; // bottom strip's baseline above the canvas edge (room for ruler labels, scale bar, readout)
 
 const FIELD_VIEWS: { id: FieldView; label: string }[] = [
   { id: 'E2', label: '|E|²' },
@@ -294,7 +294,7 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
         </div>
       )}
 
-      <div className="canvas-tools" aria-label="Field display">
+      <div className="canvas-tools" aria-label="Field display" style={showProfiles ? { left: PROFILE_PX + 18 } : undefined}>
         <div className="line">
           <label htmlFor="fieldview">Show</label>
           <select id="fieldview" className="field" value={ui.fieldView} onChange={(e) => setUi({ fieldView: e.target.value as FieldView })} style={{ width: 'auto' }}>
@@ -443,6 +443,17 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
           const line = (pts: [number, number][]) => pts.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('');
           const bx = (a: Float32Array): [number, number][] => xs.map((x, i) => [x, yb - a[i] * HGT]);
           const ly = (a: Float32Array): [number, number][] => ys.map((y, j) => [a[j] * HGT, y]);
+          // Ruler ticks at round values, about every 80 px, within the visible range.
+          const step = niceStep(80 / view.scale);
+          const ticks = (lo: number, hi: number) => {
+            const out: number[] = [];
+            for (let k = Math.ceil(lo / step); k * step <= hi; k++) out.push(Number((k * step).toFixed(6)));
+            return out;
+          };
+          const xTicks = ticks(toUm(view, size, HGT + 30, 0)[0], vx1);
+          const yTicks = ticks(toUm(view, size, 0, yb - HGT - 16)[1], vy1);
+          // In the |E|² view this is the MFD of the results table; for a single component it is that component's width.
+          const widthLabel = ui.fieldView === 'E2' ? 'MFD' : '1/e² width';
           return (
             <g pointerEvents="none" opacity={stale ? 0.45 : 1} className="profiles">
               <rect x={0} y={yb - HGT - 6} width={W} height={HGT + 6} className="profile-bg" />
@@ -454,6 +465,57 @@ export function CanvasView({ result, stale, busy }: { result: SolveResult | null
               <path d={line(ly(prof.marginalY))} className="profile-line" />
               <path d={line(ly(prof.cutY))} className="profile-cut" />
               <line x1={0} x2={W} y1={yb} y2={yb} className="profile-axis" />
+              <line x1={0.5} x2={0.5} y1={0} y2={yb} className="profile-axis" />
+              {/* Rulers */}
+              {xTicks.map((v) => {
+                const px = P(v, 0)[0];
+                return (
+                  <g key={`x${v}`}>
+                    <line x1={px} x2={px} y1={yb} y2={yb + 5} className="profile-axis" />
+                    <text className="ruler-label" x={px} y={yb + 16} textAnchor="middle">{toDisplay(v, ui.lengthUnit)}</text>
+                  </g>
+                );
+              })}
+              <text className="ruler-label" x={W - 8} y={yb - HGT + 8} textAnchor="end">x ({UNIT_LABEL[ui.lengthUnit]})</text>
+              {yTicks.map((v) => {
+                const py = P(0, v)[1];
+                return (
+                  <g key={`y${v}`}>
+                    <line x1={0} x2={5} y1={py} y2={py} className="profile-axis" />
+                    <text className="ruler-label" x={8} y={py + 4}>{toDisplay(v, ui.lengthUnit)}</text>
+                  </g>
+                );
+              })}
+              <text className="ruler-label" x={8} y={Math.max(P(0, vy1)[1], 0) + 34}>y ({UNIT_LABEL[ui.lengthUnit]})</text>
+              {/* 1/e² width of the peak cut, marked on each ruler */}
+              {prof.widthX && (() => {
+                const [a, b] = [P(prof.widthX[0], 0)[0], P(prof.widthX[1], 0)[0]];
+                const lvl = yb - Math.exp(-2) * HGT;
+                return (
+                  <g className="mfd-mark">
+                    <line x1={a} x2={b} y1={yb} y2={yb} className="span" />
+                    <line x1={a} x2={a} y1={yb + 4} y2={lvl} />
+                    <line x1={b} x2={b} y1={yb + 4} y2={lvl} />
+                    <text x={(a + b) / 2} y={yb + 30} textAnchor="middle">
+                      {widthLabel} x {fmtMfd(prof.widthX[1] - prof.widthX[0])} µm
+                    </text>
+                  </g>
+                );
+              })()}
+              {prof.widthY && (() => {
+                const [a, b] = [P(0, prof.widthY[0])[1], P(0, prof.widthY[1])[1]];
+                const lvl = Math.exp(-2) * HGT;
+                return (
+                  <g className="mfd-mark">
+                    <line x1={0.5} x2={0.5} y1={a} y2={b} className="span" />
+                    <line x1={0} x2={lvl} y1={a} y2={a} />
+                    <line x1={0} x2={lvl} y1={b} y2={b} />
+                    <text x={HGT + 12} y={(a + b) / 2 + 4}>
+                      {widthLabel} y {fmtMfd(prof.widthY[1] - prof.widthY[0])} µm
+                    </text>
+                  </g>
+                );
+              })()}
             </g>
           );
         })()}

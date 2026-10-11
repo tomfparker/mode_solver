@@ -145,3 +145,9 @@ A second top-bar tab ("Solver | About") shows a single minimalist page: what the
 
 ## 2026-10-10 — Maintainer: optional field profiles on the canvas
 A "Profiles" tick box in the canvas display options (off by default) draws two strips aligned with the structure: along the bottom, the displayed quantity integrated over y against x; along the left, integrated over x against y (solid, filled). Each also shows the cut through the peak (dashed), which is what the MFD values are measured on. The quantity follows the field selector: |E|², or the squared magnitude of the chosen component. Both curves are normalised to their own maximum. With profiles on, the view fits the window into the area left free by the strips. The setting is UI state, not part of the shareable link.
+
+## 2026-10-11 — Maintainer: profiles on by default with rulers and beam-diameter marks; 1/e² contour off by default
+- Profile strips are shown by default; the 1/e² contour is off by default. Both remain tick boxes in the display options.
+- Each strip has a ruler: ticks at round values about every 80 px, labelled in the user's length unit.
+- The 1/e² width of the cut through the peak is marked on each ruler as a coloured span with its value. In the |E|² view this is the MFD of the results table, and is labelled "MFD"; for a single field component it is labelled "1/e² width". Values follow the MFD precision rule (0.01 µm).
+- The display-options box moves to the right of the left strip while profiles are shown. The scale bar stays.
